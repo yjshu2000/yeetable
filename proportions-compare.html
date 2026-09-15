@@ -1,0 +1,137 @@
+<title>Yeetable Proportions</title>
+<style>
+  :root {
+    --bg: #f2f4f8;
+    --surface: #ffffff;
+    --ink: #1b1e24;
+    --muted: #5b6472;
+    --border: #9fb3d1;
+    --play: #dde6f5;
+    --control: #eef1f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161b;
+      --surface: #1c1f27;
+      --ink: #eef0f5;
+      --muted: #9aa3b3;
+      --border: #3c4b66;
+      --play: #232c3d;
+      --control: #1c2027;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161b;
+    --surface: #1c1f27;
+    --ink: #eef0f5;
+    --muted: #9aa3b3;
+    --border: #3c4b66;
+    --play: #232c3d;
+    --control: #1c2027;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, sans-serif;
+    padding: 28px 20px 40px;
+    margin: 0;
+  }
+
+  h1 {
+    font-weight: 700;
+    font-size: clamp(20px, 5vw, 26px);
+    margin: 0 0 8px;
+  }
+
+  .sub {
+    color: var(--muted);
+    font-size: 13.5px;
+    max-width: 56ch;
+    margin: 0 0 24px;
+    line-height: 1.5;
+  }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 32px;
+  }
+
+  .box {
+    width: min(100%, 220px);
+  }
+
+  .label {
+    font-weight: 600;
+    font-size: 16px;
+    margin-bottom: 10px;
+  }
+
+  .phone {
+    width: 100%;
+    aspect-ratio: 9 / 19;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 22px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .play {
+    width: 100%;
+    background: var(--play);
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+
+  .control {
+    flex: 1;
+    background: var(--control);
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    min-height: 0;
+  }
+
+  .split {
+    font-family: "Consolas", monospace;
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 8px;
+  }
+
+  .split b { color: var(--ink); }
+</style>
+
+<h1>Play-area proportions</h1>
+<p class="sub">
+  Same phone frame (9:19), same width. Top block is the play area at
+  its own width:height ratio, bottom block is whatever's left for the
+  control strip.
+</p>
+
+<div class="row">
+  <div class="box">
+    <div class="label">3 &times; 4 (0.75)</div>
+    <div class="phone">
+      <div class="play" style="aspect-ratio: 3 / 4;"></div>
+      <div class="control"></div>
+    </div>
+    <div class="split">play <b>61%</b> &middot; control <b>39%</b></div>
+  </div>
+
+  <div class="box">
+    <div class="label">3 &times; 5 (0.60)</div>
+    <div class="phone">
+      <div class="play" style="aspect-ratio: 3 / 5;"></div>
+      <div class="control"></div>
+    </div>
+    <div class="split">play <b>76%</b> &middot; control <b>24%</b></div>
+  </div>
+</div>
