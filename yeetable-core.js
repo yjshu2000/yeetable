@@ -330,6 +330,22 @@
     ctx.stroke();
     ctx.setLineDash([]);
 
+    // background tutorial labels, sitting behind the tiles
+    ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.font = "700 " + Math.max(20, width * 0.12) + "px system-ui, sans-serif";
+    ctx.fillText("table", width / 2, playHeight / 2);
+
+    const controlMidY = playHeight + (height - playHeight) / 2;
+    const controlFontSize = Math.max(14, width * 0.06);
+    ctx.font = "600 " + controlFontSize + "px system-ui, sans-serif";
+    ctx.fillText("control area", width / 2, controlMidY - controlFontSize * 0.7);
+    ctx.font = "500 " + controlFontSize * 0.7 + "px system-ui, sans-serif";
+    ctx.fillText("(throw with mouse or touch)", width / 2,
+      controlMidY + controlFontSize * 0.3);
+
     const bodies = Matter.Composite.allBodies(engine.world);
     for (const body of bodies) {
       if (body.isStatic || !body.value) continue;
