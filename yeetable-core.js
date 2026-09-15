@@ -31,8 +31,15 @@
     }
     width = w;
     playHeight = pH;
-    canvas.width = width;
-    canvas.height = height;
+    // Match the canvas's raster resolution to the display's real pixel
+    // density, or fine detail (tile numbers especially) gets upscaled
+    // and blurred on any HiDPI phone screen.
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = width + "px";
+    canvas.style.height = height + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   layout();
   window.addEventListener("resize", layout);
@@ -41,6 +48,7 @@
   // Hand-picked, same source as hex2-core.js's TILE_HSL - borrowed
   // palette so both games read as part of the same family.
   const TILE_HSL = {
+    1: [0, 66, 84],
     2: [0, 66, 66],
     4: [0, 69, 55],
     8: [23, 78, 52],
@@ -75,7 +83,7 @@
 
   // Linear size growth, exponential value labels.
   const BASE_RADIUS = 16;
-  const RADIUS_STEP = 6;
+  const RADIUS_STEP = 4;
 
   function radiusFor(value) {
     const level = Math.round(Math.log2(value)) - 1;
@@ -133,7 +141,7 @@
   }
 
   function randomStartValue() {
-    return Math.random() < 0.8 ? 2 : 4;
+    return Math.random() < 0.8 ? 1 : 2;
   }
 
   // Grabbability is purely positional: any tile that hasn't crossed
