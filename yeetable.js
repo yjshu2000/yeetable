@@ -181,7 +181,9 @@
     buildWalls();
   });
 
-  const FRICTION_AIR = 0.0008;
+  // No air drag at all - the only things that bleed energy now are the solver's
+  // contact losses and merges averaging two velocities into one.
+  const FRICTION_AIR = 0;
   let nextId = 1;
 
   function makeTile(x, y, value) {
@@ -211,6 +213,12 @@
   // currently has hold of, if any.
   let dragTarget = null;
   let dragging = false;
+
+  // The effective pause - derived from the button and the window's focus,
+  // and read by the runner, the pointer handler and the save timer. Nothing
+  // is torn down when it flips, so a stuck pause is visible rather than
+  // silently killing autosave.
+  let paused = false;
 
   function spawnTile() {
     const x = width / 2;
@@ -281,7 +289,12 @@
       localStorage.setItem(saveKey(), JSON.stringify(payload));
     } catch (e) {}
   }
-  setInterval(saveState, SAVE_INTERVAL);
+  // Guarded here rather than inside saveState, so Save Now still works
+  // while paused instead of becoming a dead button.
+  setInterval(function () {
+    if (paused) return;
+    saveState();
+  }, SAVE_INTERVAL);
   document.getElementById("savenow").addEventListener("click", saveState);
 
   function loadState() {
@@ -440,7 +453,7 @@
   }
 
   canvas.addEventListener("pointerdown", function (e) {
-    if (dragging) return;
+    if (dragging || paused) return;
     const p = pointerPos(e);
     if (p.y <= playHeight) return;
     // Any tap anywhere in the control area snaps the nearest tile still
@@ -513,9 +526,64 @@
   canvas.addEventListener("pointerup", releaseDrag);
   canvas.addEventListener("pointercancel", releaseDrag);
 
+  // Background label colours - the table label sits behind moving tiles so it
+  // stays faint; the control strip's sits on empty space and can take more
+  // contrast. Separate so each tunes on its own.
+  const TABLE_LABEL = "rgba(255, 255, 255, 0.18)";
+  const CONTROL_LABEL = "rgba(255, 255, 255, 0.4)";
+
   // -------------------------- render loop --------------------------
   const runner = Matter.Runner.create();
   Matter.Runner.run(runner, engine);
+
+  // -------------------------- pause --------------------------
+  // Runner.enabled skips the engine update but leaves the loop running.
+  // Runner.stop/run would hand the engine the entire paused span as a
+  // single delta on resume and teleport every tile across the table.
+  const pauseBtn = document.getElementById("pause");
+
+  // Two independent reasons to be paused. Keeping them apart is what stops
+  // clicking back into the window from cancelling a pause you asked for.
+  let manualPause = false;
+  let blurPause = false;
+
+  function applyPause() {
+    const next = manualPause || blurPause;
+    const changed = next !== paused;
+    paused = next;
+    runner.enabled = !paused;
+    // The label tracks the button's own state; an auto-pause happens while
+    // you aren't looking and undoes itself, so it shouldn't relabel it.
+    if (manualPause) {
+      pauseBtn.textContent = "Resume";
+    } else {
+      pauseBtn.textContent = "Pause";
+    }
+    if (paused && changed) {
+      // Drop any in-flight drag in place rather than throwing it.
+      dragging = false;
+      dragTarget = null;
+      saveState();
+    }
+  }
+
+  pauseBtn.addEventListener("click", function () {
+    manualPause = !manualPause;
+    applyPause();
+  });
+
+  // Asked fresh off the DOM rather than tracked per event, so the three
+  // listeners can't drift out of sync with each other. visibilitychange
+  // alone misses a window that is still visible but no longer focused.
+  function refreshFocus() {
+    blurPause = document.hidden || !document.hasFocus();
+    applyPause();
+  }
+
+  window.addEventListener("blur", refreshFocus);
+  window.addEventListener("focus", refreshFocus);
+  document.addEventListener("visibilitychange", refreshFocus);
+  refreshFocus();
 
   function draw() {
     ctx.clearRect(0, 0, width, height);
@@ -523,7 +591,7 @@
     // table surface
     ctx.fillStyle = "#1c1f27";
     ctx.fillRect(0, 0, width, playHeight);
-    ctx.fillStyle = "#14161b";
+    ctx.fillStyle = "#232833";
     ctx.fillRect(0, playHeight, width, height - playHeight);
 
     // divider between play area and control strip
@@ -537,15 +605,16 @@
     ctx.setLineDash([]);
 
     // background tutorial labels, sitting behind the tiles
-    ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
+    ctx.fillStyle = TABLE_LABEL;
     ctx.font = "700 " + width * 0.12 + "px system-ui, sans-serif";
     ctx.fillText("table", width / 2, playHeight / 2);
 
     const controlMidY = playHeight + (height - playHeight) / 2;
     const controlFontSize = width * 0.06;
+    ctx.fillStyle = CONTROL_LABEL;
     ctx.font = "600 " + controlFontSize + "px system-ui, sans-serif";
     ctx.fillText("control area", width / 2,
       controlMidY - controlFontSize * 0.7);

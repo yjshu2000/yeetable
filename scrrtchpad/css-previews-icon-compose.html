@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Yeetable Icon Composer</title>
+<style>
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 20px 16px 48px;
+    background: #12141a;
+    color: #eef0f5;
+    font-family: system-ui, sans-serif;
+  }
+
+  h1 {
+    font-size: 19px;
+    margin: 0 0 4px;
+  }
+
+  .sub {
+    color: #9aa3b3;
+    font-size: 13px;
+    line-height: 1.55;
+    margin: 0 0 20px;
+    max-width: 70ch;
+  }
+
+  h2 {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #9aa3b3;
+    font-weight: 600;
+    margin: 0 0 10px;
+  }
+
+  section { margin-bottom: 24px; }
+
+  .scroller {
+    overflow: auto;
+    border: 1px solid #262b36;
+    border-radius: 6px;
+  }
+
+  /* Fixed pixel size on purpose: tiles are drawn at their true radii, so
+     the working area must not rescale underneath them. */
+  #stage {
+    position: relative;
+    width: 880px;
+    height: 660px;
+    background: #14161b;
+    touch-action: none;
+    user-select: none;
+  }
+
+  /* Under the tiles, always. */
+  #frame {
+    position: absolute;
+    z-index: 1;
+    border: 1px dashed #5d78a8;
+    background: rgba(93, 120, 168, 0.1);
+  }
+
+  .handle {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    background: #5d78a8;
+    border-radius: 3px;
+  }
+
+  .handle.nw { left: -11px; top: -11px; }
+  .handle.ne { right: -11px; top: -11px; }
+  .handle.sw { left: -11px; bottom: -11px; }
+  .handle.se { right: -11px; bottom: -11px; }
+
+  .tile {
+    position: absolute;
+    z-index: 2;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .tile.held {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
+  }
+
+  .palette {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .swatch {
+    border: 0;
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 11px;
+    padding: 0;
+  }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+  }
+
+  button.act {
+    background: rgba(255, 255, 255, 0.1);
+    color: #eef0f5;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 9px 15px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+  }
+
+  button.act:active { background: rgba(255, 255, 255, 0.2); }
+
+  .readout {
+    font-family: Consolas, ui-monospace, monospace;
+    font-size: 12px;
+    color: #9aa3b3;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .readout b { color: #eef0f5; }
+
+  #out {
+    width: 100%;
+    max-width: 880px;
+    height: 220px;
+    margin-top: 12px;
+    background: #14161b;
+    color: #cfd6e4;
+    border: 1px solid #262b36;
+    border-radius: 6px;
+    padding: 10px;
+    font-family: Consolas, ui-monospace, monospace;
+    font-size: 11.5px;
+    line-height: 1.45;
+    white-space: pre;
+  }
+
+  #download {
+    color: #8fb0e8;
+    font-size: 13px;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<h1>Icon composer</h1>
+<p class="sub">
+  Tiles are at their true sizes &mdash; a 1 is 24px across, a 262144 is
+  168px. Drag one and it goes exactly where you put it; everything it
+  touches gets shoved out of the way, and that shove carries on down the
+  pile. Nothing coasts. The square frame sits underneath the tiles: drag it
+  from any bare spot inside it, resize from a corner. Bury a corner under a
+  tile and you'll have to nudge that tile aside to grab it again.
+  Double-tap a tile to delete it. Everything saves as you go. Export SVG
+  maps whatever the frame holds onto a 512 viewBox and hands you the file.
+</p>
+
+<section>
+  <div class="scroller">
+    <div id="stage">
+      <div id="frame">
+        <div class="handle nw" data-corner="nw"></div>
+        <div class="handle ne" data-corner="ne"></div>
+        <div class="handle sw" data-corner="sw"></div>
+        <div class="handle se" data-corner="se"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Add a tile</h2>
+  <div class="palette" id="palette"></div>
+</section>
+
+<section>
+  <h2>Controls</h2>
+  <div class="controls">
+    <button class="act" id="export">Export SVG</button>
+    <button class="act" id="clear">Clear tiles</button>
+    <button class="act" id="resetframe">Reset frame</button>
+    <span class="readout" id="readout"></span>
+  </div>
+</section>
+
+<section>
+  <h2>SVG</h2>
+  <div class="controls">
+    <a id="download" href="#" download="icon-yeetable.svg" hidden>Download icon-yeetable.svg</a>
+  </div>
+  <textarea id="out" spellcheck="false" hidden></textarea>
+</section>
+
+<script>
+// copied verbatim from yeetable.js so this cannot drift from the game
+const TILE_HSL = {
+  1: [0, 66, 84],
+  2: [0, 66, 66],
+  4: [0, 69, 55],
+  8: [23, 78, 52],
+  16: [41, 92, 49],
+  32: [56, 88, 56],
+  64: [80, 78, 52],
+  128: [128, 88, 43],
+  256: [152, 66, 60],
+  512: [189, 66, 59],
+  1024: [211, 80, 54],
+  2048: [224, 79, 51],
+  4096: [228, 92, 35],
+  8192: [246, 66, 58],
+  16384: [269, 66, 60],
+  32768: [286, 68, 70],
+  65536: [305, 66, 54],
+  131072: [328, 81, 50],
+  262144: [348, 55, 48],
+};
+const TOP_SOLID = 262144;
+
+function hslToRgb(h, s, l) {
+  const hh = h / 360;
+  const a = s * Math.min(l, 1 - l);
+  function channel(n) {
+    const k = (n + hh * 12) % 12;
+    return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+  }
+  return [channel(0), channel(8), channel(4)];
+}
+
+function tileColours(value) {
+  const hsl = TILE_HSL[value] || TILE_HSL[TOP_SOLID];
+  const fill = "hsl(" + hsl[0] + ", " + hsl[1] + "%, " + hsl[2] + "%)";
+  const rgb = hslToRgb(hsl[0], hsl[1] / 100, hsl[2] / 100);
+  const lum = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+  let text = "#ffffff";
+  if (lum > 0.45) {
+    text = "#171a1f";
+  }
+  return { fill: fill, text: text };
+}
+
+const BASE_RADIUS = 16;
+const RADIUS_STEP = 4;
+
+function radiusFor(value) {
+  const level = Math.round(Math.log2(value)) - 1;
+  return BASE_RADIUS + level * RADIUS_STEP;
+}
+
+// ------------------------------ state ------------------------------
+const STAGE_W = 880;
+const STAGE_H = 660;
+const FRAME_RATIO = 1;
+const FRAME_MIN_W = 60;
+const SAVE_KEY = "yeetable.icon";
+// Stiff: every overlap is resolved in full each frame, so a dragged tile
+// and the whole chain behind it move together with the finger.
+const RELAX_PASSES = 14;
+
+const stage = document.getElementById("stage");
+const frameEl = document.getElementById("frame");
+const palette = document.getElementById("palette");
+const readout = document.getElementById("readout");
+
+const values = Object.keys(TILE_HSL).map(Number).sort(function (a, b) {
+  return a - b;
+});
+
+let tiles = [];
+let frame = { x: 290, y: 180, w: 300 };
+let nextId = 1;
+let heldTile = null;
+let frameDrag = null;
+let lastTap = { id: null, t: 0 };
+
+function frameH() {
+  return frame.w * FRAME_RATIO;
+}
+
+function save() {
+  const payload = { tiles: tiles, frame: frame };
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+  } catch (e) {}
+}
+
+function load() {
+  let data = null;
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) data = JSON.parse(raw);
+  } catch (e) {}
+  if (!data) {
+    return;
+  }
+  if (Array.isArray(data.tiles)) {
+    tiles = data.tiles;
+    for (const t of tiles) {
+      if (t.id >= nextId) {
+        nextId = t.id + 1;
+      }
+    }
+  }
+  if (data.frame && typeof data.frame.w === "number") {
+    frame = data.frame;
+  }
+}
+
+// --------------------------- separation ---------------------------
+// Push every overlapping pair apart along the line between their centres.
+// The split is weighted by inverse area, so a big tile shoves a small one
+// much further than the reverse. The held tile carries zero weight and so
+// never yields - that is what turns a drag into a chain of shoves.
+function separateOnce() {
+  for (let i = 0; i < tiles.length; i++) {
+    for (let j = i + 1; j < tiles.length; j++) {
+      const a = tiles[i];
+      const b = tiles[j];
+      const ra = radiusFor(a.value);
+      const rb = radiusFor(b.value);
+      const minDist = ra + rb;
+      let dx = b.x - a.x;
+      let dy = b.y - a.y;
+      let dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist >= minDist) {
+        continue;
+      }
+      if (dist < 0.0001) {
+        // exactly stacked - pick an arbitrary axis to separate along
+        dx = 1;
+        dy = 0;
+        dist = 1;
+      }
+      const overlap = minDist - dist;
+      const nx = dx / dist;
+      const ny = dy / dist;
+
+      let wa = 1 / (ra * ra);
+      let wb = 1 / (rb * rb);
+      if (heldTile === a.id) {
+        wa = 0;
+      }
+      if (heldTile === b.id) {
+        wb = 0;
+      }
+      const total = wa + wb;
+      if (total === 0) {
+        continue;
+      }
+      const sa = overlap * (wa / total);
+      const sb = overlap * (wb / total);
+      a.x -= nx * sa;
+      a.y -= ny * sa;
+      b.x += nx * sb;
+      b.y += ny * sb;
+    }
+  }
+}
+
+function clampAll() {
+  for (const t of tiles) {
+    const r = radiusFor(t.value);
+    t.x = Math.min(Math.max(t.x, r), STAGE_W - r);
+    t.y = Math.min(Math.max(t.y, r), STAGE_H - r);
+  }
+}
+
+function relax() {
+  for (let p = 0; p < RELAX_PASSES; p++) {
+    separateOnce();
+    clampAll();
+  }
+}
+
+// ----------------------------- render -----------------------------
+const els = new Map();
+
+function render() {
+  frameEl.style.left = frame.x + "px";
+  frameEl.style.top = frame.y + "px";
+  frameEl.style.width = frame.w + "px";
+  frameEl.style.height = frameH() + "px";
+
+  const seen = new Set();
+  for (const t of tiles) {
+    seen.add(t.id);
+    let el = els.get(t.id);
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "tile";
+      stage.appendChild(el);
+      els.set(t.id, el);
+    }
+    const r = radiusFor(t.value);
+    const colours = tileColours(t.value);
+    el.style.width = r * 2 + "px";
+    el.style.height = r * 2 + "px";
+    el.style.left = t.x - r + "px";
+    el.style.top = t.y - r + "px";
+    el.style.background = colours.fill;
+    el.style.color = colours.text;
+    el.style.fontSize = r * 0.55 + "px";
+    el.textContent = String(t.value);
+    if (heldTile === t.id) {
+      el.classList.add("held");
+    } else {
+      el.classList.remove("held");
+    }
+  }
+
+  for (const [id, el] of els) {
+    if (!seen.has(id)) {
+      el.remove();
+      els.delete(id);
+    }
+  }
+
+  readout.textContent = "frame " + Math.round(frame.w) + " × " +
+    Math.round(frameH()) + "  ·  " + tiles.length + " tiles";
+}
+
+function step() {
+  relax();
+  render();
+  requestAnimationFrame(step);
+}
+
+// ----------------------------- input ------------------------------
+function stagePos(e) {
+  const rect = stage.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+function tileAt(p) {
+  // last added wins, matching the paint order
+  for (let i = tiles.length - 1; i >= 0; i--) {
+    const t = tiles[i];
+    const r = radiusFor(t.value);
+    const dx = p.x - t.x;
+    const dy = p.y - t.y;
+    if (dx * dx + dy * dy <= r * r) {
+      return t;
+    }
+  }
+  return null;
+}
+
+function handleAt(p) {
+  const h = frameH();
+  const corners = [
+    { name: "nw", x: frame.x, y: frame.y },
+    { name: "ne", x: frame.x + frame.w, y: frame.y },
+    { name: "sw", x: frame.x, y: frame.y + h },
+    { name: "se", x: frame.x + frame.w, y: frame.y + h },
+  ];
+  for (const c of corners) {
+    if (Math.abs(p.x - c.x) <= 14 && Math.abs(p.y - c.y) <= 14) {
+      return c.name;
+    }
+  }
+  return null;
+}
+
+function insideFrame(p) {
+  if (p.x < frame.x || p.x > frame.x + frame.w) {
+    return false;
+  }
+  if (p.y < frame.y || p.y > frame.y + frameH()) {
+    return false;
+  }
+  return true;
+}
+
+stage.addEventListener("pointerdown", function (e) {
+  const p = stagePos(e);
+
+  // Tiles sit on top of the frame, so they get first refusal on the grab.
+  const t = tileAt(p);
+  if (t) {
+    const now = performance.now();
+    if (lastTap.id === t.id && now - lastTap.t < 350) {
+      tiles = tiles.filter(function (o) {
+        return o.id !== t.id;
+      });
+      lastTap = { id: null, t: 0 };
+      save();
+      return;
+    }
+    lastTap = { id: t.id, t: now };
+    heldTile = t.id;
+    stage.setPointerCapture(e.pointerId);
+    return;
+  }
+
+  const corner = handleAt(p);
+  if (corner) {
+    frameDrag = { mode: "resize", corner: corner };
+    stage.setPointerCapture(e.pointerId);
+    return;
+  }
+
+  if (insideFrame(p)) {
+    frameDrag = {
+      mode: "move",
+      dx: p.x - frame.x,
+      dy: p.y - frame.y,
+    };
+    stage.setPointerCapture(e.pointerId);
+  }
+});
+
+// Stays square; the corner opposite the one being dragged stays put, and
+// the larger of the two axis deltas wins.
+function resizeFrame(p, corner) {
+  const h = frameH();
+  let ax = frame.x;
+  let ay = frame.y;
+  if (corner === "nw" || corner === "sw") {
+    ax = frame.x + frame.w;
+  }
+  if (corner === "nw" || corner === "ne") {
+    ay = frame.y + h;
+  }
+
+  const dx = Math.abs(p.x - ax);
+  const dy = Math.abs(p.y - ay);
+  let w = Math.max(dx, dy / FRAME_RATIO);
+  w = Math.max(w, FRAME_MIN_W);
+  const newH = w * FRAME_RATIO;
+
+  let x = ax;
+  let y = ay;
+  if (corner === "nw" || corner === "sw") {
+    x = ax - w;
+  }
+  if (corner === "nw" || corner === "ne") {
+    y = ay - newH;
+  }
+
+  frame.x = x;
+  frame.y = y;
+  frame.w = w;
+}
+
+stage.addEventListener("pointermove", function (e) {
+  const p = stagePos(e);
+
+  if (heldTile !== null) {
+    const t = tiles.find(function (o) {
+      return o.id === heldTile;
+    });
+    if (!t) {
+      return;
+    }
+    const r = radiusFor(t.value);
+    t.x = Math.min(Math.max(p.x, r), STAGE_W - r);
+    t.y = Math.min(Math.max(p.y, r), STAGE_H - r);
+    return;
+  }
+
+  if (!frameDrag) {
+    return;
+  }
+  if (frameDrag.mode === "move") {
+    frame.x = p.x - frameDrag.dx;
+    frame.y = p.y - frameDrag.dy;
+    return;
+  }
+  resizeFrame(p, frameDrag.corner);
+});
+
+function drop() {
+  if (heldTile === null && !frameDrag) {
+    return;
+  }
+  heldTile = null;
+  frameDrag = null;
+  save();
+}
+
+stage.addEventListener("pointerup", drop);
+stage.addEventListener("pointercancel", drop);
+
+// ---------------------------- palette -----------------------------
+for (const value of values) {
+  const colours = tileColours(value);
+  const btn = document.createElement("button");
+  btn.className = "swatch";
+  btn.type = "button";
+  btn.style.background = colours.fill;
+  btn.style.color = colours.text;
+  btn.textContent = String(value);
+  btn.addEventListener("click", function () {
+    tiles.push({
+      id: nextId++,
+      value: value,
+      x: STAGE_W / 2 + (Math.random() - 0.5) * 60,
+      y: STAGE_H / 2 + (Math.random() - 0.5) * 60,
+    });
+    save();
+  });
+  palette.appendChild(btn);
+}
+
+// ----------------------------- export -----------------------------
+// The frame maps onto a 512 viewBox, so whatever it holds becomes the
+// icon at any resolution. Circles are emitted first and every label
+// after, so a tile drawn later can never cover an earlier tile's number.
+const ICON_SIZE = 512;
+const ICON_BG = "#14161b";
+const FONT_STACK = "Segoe UI, ui-sans-serif, system-ui, sans-serif";
+
+function r2(n) {
+  return Math.round(n * 100) / 100;
+}
+
+function svgMarkup() {
+  const k = ICON_SIZE / frame.w;
+  const shown = [];
+  for (const t of tiles) {
+    const r = radiusFor(t.value) * k;
+    const cx = (t.x - frame.x) * k;
+    const cy = (t.y - frame.y) * k;
+    if (cx + r < 0 || cx - r > ICON_SIZE) {
+      continue;
+    }
+    if (cy + r < 0 || cy - r > ICON_SIZE) {
+      continue;
+    }
+    shown.push({ value: t.value, r: r, cx: cx, cy: cy });
+  }
+
+  const lines = [];
+  lines.push('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' +
+    ICON_SIZE + " " + ICON_SIZE + '" width="' + ICON_SIZE +
+    '" height="' + ICON_SIZE + '">');
+  lines.push('<defs><clipPath id="frame"><rect width="' + ICON_SIZE +
+    '" height="' + ICON_SIZE + '"/></clipPath></defs>');
+  lines.push('<rect width="' + ICON_SIZE + '" height="' + ICON_SIZE +
+    '" fill="' + ICON_BG + '"/>');
+  lines.push('<g clip-path="url(#frame)">');
+
+  for (const s of shown) {
+    const colours = tileColours(s.value);
+    lines.push('<circle cx="' + r2(s.cx) + '" cy="' + r2(s.cy) +
+      '" r="' + r2(s.r) + '" fill="' + colours.fill + '"/>');
+  }
+  lines.push('<g font-family="' + FONT_STACK +
+    '" font-weight="600" text-anchor="middle">');
+  for (const s of shown) {
+    const colours = tileColours(s.value);
+    lines.push('<text x="' + r2(s.cx) + '" y="' + r2(s.cy) +
+      '" dy="0.36em" font-size="' + r2(s.r * 0.55) + '" fill="' +
+      colours.text + '">' + s.value + "</text>");
+  }
+  lines.push("</g>");
+  lines.push("</g>");
+  lines.push("</svg>");
+  return lines.join("\n");
+}
+
+const outEl = document.getElementById("out");
+const downloadEl = document.getElementById("download");
+
+document.getElementById("export").addEventListener("click", function () {
+  const markup = svgMarkup();
+  outEl.value = markup;
+  outEl.hidden = false;
+  const blob = new Blob([markup], { type: "image/svg+xml" });
+  if (downloadEl.dataset.url) {
+    URL.revokeObjectURL(downloadEl.dataset.url);
+  }
+  const url = URL.createObjectURL(blob);
+  downloadEl.href = url;
+  downloadEl.dataset.url = url;
+  downloadEl.hidden = false;
+});
+
+document.getElementById("clear").addEventListener("click", function () {
+  tiles = [];
+  save();
+});
+
+document.getElementById("resetframe").addEventListener("click", function () {
+  frame = { x: 290, y: 180, w: 300 };
+  save();
+});
+
+load();
+requestAnimationFrame(step);
+</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<defs><clipPath id="frame"><rect width="512" height="512"/></clipPath></defs>
+<rect width="512" height="512" fill="#14161b"/>
+<g clip-path="url(#frame)">
+<circle cx="99.87" cy="154.19" r="160.18" fill="hsl(224, 79%, 51%)"/>
+<circle cx="134.44" cy="449.36" r="114.41" fill="hsl(128, 88%, 43%)"/>
+<circle cx="466.23" cy="400.73" r="80.09" fill="hsl(41, 92%, 49%)"/>
+<circle cx="451.93" cy="137.58" r="68.65" fill="hsl(23, 78%, 52%)"/>
+<circle cx="360.4" cy="240.55" r="57.21" fill="hsl(0, 69%, 55%)"/>
+<circle cx="308.92" cy="486.54" r="34.32" fill="hsl(0, 66%, 84%)"/>
+<g font-family="Segoe UI, ui-sans-serif, system-ui, sans-serif" font-weight="600" text-anchor="middle">
+<text x="99.87" y="154.19" dy="0.36em" font-size="88.1" fill="#ffffff">2048</text>
+<text x="134.44" y="449.36" dy="0.36em" font-size="62.93" fill="#171a1f">128</text>
+<text x="466.23" y="400.73" dy="0.36em" font-size="44.05" fill="#171a1f">16</text>
+<text x="451.93" y="137.58" dy="0.36em" font-size="37.76" fill="#171a1f">8</text>
+<text x="360.4" y="240.55" dy="0.36em" font-size="31.46" fill="#ffffff">4</text>
+<text x="308.92" y="486.54" dy="0.36em" font-size="18.88" fill="#171a1f">1</text>
+</g>
+</g>
+</svg>
