@@ -10,6 +10,7 @@
   const canvas = document.getElementById("board");
   const ctx = canvas.getContext("2d");
   const scoreEl = document.getElementById("score");
+  const hud = document.getElementById("hud");
 
   let width = 0;
   let height = 0;
@@ -40,6 +41,11 @@
     canvas.style.width = width + "px";
     canvas.style.height = height + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // The HUD sits over the table, not the browser window - it needs
+    // to match the canvas's actual footprint, not the viewport's.
+    hud.style.left = "50%";
+    hud.style.width = width + "px";
+    hud.style.transform = "translateX(-50%)";
   }
   layout();
   window.addEventListener("resize", layout);
@@ -155,13 +161,95 @@
     const y = playHeight + (height - playHeight) * 0.7;
     return makeTile(x, y, randomStartValue());
   }
-  spawnTile();
 
   // -------------------------- score --------------------------
+  const BEST_KEY = "yeetable.best";
+  const bestEl = document.getElementById("best");
   let score = 0;
+  let best = 0;
+  try {
+    best = parseInt(localStorage.getItem(BEST_KEY), 10) || 0;
+  } catch (e) {}
+  bestEl.textContent = String(best);
+
   function addScore(v) {
     score += v;
     scoreEl.textContent = String(score);
+    if (score > best) {
+      best = score;
+      bestEl.textContent = String(best);
+      try {
+        localStorage.setItem(BEST_KEY, String(best));
+      } catch (e) {}
+    }
+  }
+
+  // -------------------------- new game --------------------------
+  function newGame() {
+    for (const body of Matter.Composite.allBodies(engine.world)) {
+      if (body.isStatic || !body.value) continue;
+      World.remove(engine.world, body);
+    }
+    dragTarget = null;
+    dragging = false;
+    score = 0;
+    scoreEl.textContent = "0";
+    try {
+      localStorage.removeItem(SAVE_KEY);
+    } catch (e) {}
+    spawnTile();
+  }
+  document.getElementById("newgame").addEventListener("click", newGame);
+
+  // -------------------------- save / restore --------------------------
+  // Raw snapshot, mid-motion and all - no "wait until it settles" logic,
+  // just every tile's exact position/velocity/value dumped as-is.
+  const SAVE_KEY = "yeetable.save";
+  const SAVE_INTERVAL = 30000;
+
+  function saveState() {
+    const tiles = [];
+    for (const body of Matter.Composite.allBodies(engine.world)) {
+      if (body.isStatic || !body.value) continue;
+      tiles.push({
+        x: body.position.x,
+        y: body.position.y,
+        vx: body.velocity.x,
+        vy: body.velocity.y,
+        value: body.value,
+        crossedIntoPlay: !!body.crossedIntoPlay,
+      });
+    }
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify({ tiles: tiles, score: score }));
+    } catch (e) {}
+  }
+  setInterval(saveState, SAVE_INTERVAL);
+  document.getElementById("savenow").addEventListener("click", saveState);
+
+  function loadState() {
+    let data = null;
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (raw) data = JSON.parse(raw);
+    } catch (e) {}
+    if (!data || !Array.isArray(data.tiles) || !data.tiles.length) {
+      return false;
+    }
+    for (const t of data.tiles) {
+      const body = makeTile(t.x, t.y, t.value);
+      Body.setVelocity(body, { x: t.vx, y: t.vy });
+      body.crossedIntoPlay = !!t.crossedIntoPlay;
+    }
+    if (typeof data.score === "number") {
+      score = data.score;
+      scoreEl.textContent = String(score);
+    }
+    return true;
+  }
+
+  if (!loadState()) {
+    spawnTile();
   }
 
   // -------------------------- merging --------------------------
