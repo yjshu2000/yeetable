@@ -1,58 +1,92 @@
 (function () {
   "use strict";
 
+  // -------------------------- boards --------------------------
+  // A board is a virtual coordinate space, not a screen size. The canvas
+  // always fills the same rectangle; picking a smaller board just means
+  // fewer units span it, so the fixed-unit tiles are drawn larger and the
+  // table effectively holds less. Nothing about the layout moves.
+  const BOARDS = [
+    { key: "300", label: "300 × 400", w: 300, h: 400 },
+    { key: "360", label: "360 × 480", w: 360, h: 480 },
+    { key: "450", label: "450 × 600", w: 450, h: 600 },
+  ];
+  const DEFAULT_BOARD = "450";
+  const BOARD_KEY = "yeetable.board";
+
+  function boardSpec(key) {
+    return BOARDS.find(function (b) {
+      return b.key === key;
+    });
+  }
+
+  let board = null;
+  try {
+    board = boardSpec(localStorage.getItem(BOARD_KEY));
+  } catch (e) {
+    // storage blocked; fall through to the default
+  }
+  if (!board) {
+    board = boardSpec(DEFAULT_BOARD);
+  }
+
   // -------------------------- layout --------------------------
-  // Play area is 3:4 (width:height) - the final pick. No loss
-  // condition yet; this build is for feeling out the physics.
+  // Table is 3:4 (width:height) - the final pick. No loss condition yet;
+  // this build is for feeling out the physics.
   const PLAY_W_RATIO = 3;
   const PLAY_H_RATIO = 4;
+  // The control strip never gets shorter than this fraction of the table's
+  // width, measured off a real phone screenshot and rounded to 250/450.
+  const CONTROL_MIN_RATIO = 5 / 9;
+  const MAX_CANVAS_W = 480;
 
   const canvas = document.getElementById("board");
   const ctx = canvas.getContext("2d");
   const scoreEl = document.getElementById("score");
   const hud = document.getElementById("hud");
 
+  // Everything below this line is in board units, never pixels. `scale` is
+  // the only bridge between the two, and only layout, drawing and pointer
+  // input ever touch it.
   let width = 0;
   let height = 0;
   let playHeight = 0;
+  let scale = 1;
 
   function layout() {
-    height = window.innerHeight;
-    // The play area (3:4) and the control strip both need real room.
-    // Cap play-area height to 70% of the window, and derive width from
-    // that - rather than sizing width first and letting height fall
-    // wherever the ratio lands, which can exceed the window entirely.
-    const maxW = Math.min(window.innerWidth, 480);
-    let w = maxW;
-    let pH = w * (PLAY_H_RATIO / PLAY_W_RATIO);
-    const maxPlayHeight = height * 0.7;
-    if (pH > maxPlayHeight) {
-      pH = maxPlayHeight;
-      w = pH * (PLAY_W_RATIO / PLAY_H_RATIO);
-    }
-    width = w;
-    playHeight = pH;
+    const winH = window.innerHeight;
+    // Table height plus the control minimum, both expressed as multiples
+    // of the canvas width, gives the widest canvas the window can hold.
+    const stack = PLAY_H_RATIO / PLAY_W_RATIO + CONTROL_MIN_RATIO;
+    const wPx = Math.min(window.innerWidth, MAX_CANVAS_W, winH / stack);
+
+    scale = wPx / board.w;
+    width = board.w;
+    playHeight = board.h;
+    height = winH / scale;
+
     // Match the canvas's raster resolution to the display's real pixel
-    // density, or fine detail (tile numbers especially) gets upscaled
-    // and blurred on any HiDPI phone screen.
+    // density, or fine detail (tile numbers especially) gets upscaled and
+    // blurred on any HiDPI phone screen.
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
-    canvas.style.width = width + "px";
-    canvas.style.height = height + "px";
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    // The HUD sits over the table, not the browser window - it needs
-    // to match the canvas's actual footprint, not the viewport's.
+    canvas.width = wPx * dpr;
+    canvas.height = winH * dpr;
+    canvas.style.width = wPx + "px";
+    canvas.style.height = winH + "px";
+    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+
+    // The HUD sits over the table, not the browser window - it needs to
+    // match the canvas's actual footprint, not the viewport's.
     hud.style.left = "50%";
-    hud.style.width = width + "px";
+    hud.style.width = wPx + "px";
     hud.style.transform = "translateX(-50%)";
   }
   layout();
-  window.addEventListener("resize", layout);
 
   // -------------------------- tile values --------------------------
-  // Hand-picked, same source as hex2-core.js's TILE_HSL - borrowed
-  // palette so both games read as part of the same family.
+  // Borrowed wholesale from hex2-core.js's TILE_HSL so both games read as part
+  // of the same family. This is hex2^'s full solid ladder; its two gradient
+  // tiers above 262144 are not ported.
   const TILE_HSL = {
     1: [0, 66, 84],
     2: [0, 66, 66],
@@ -66,8 +100,15 @@
     512: [189, 66, 59],
     1024: [211, 80, 54],
     2048: [224, 79, 51],
+    4096: [228, 92, 35],
+    8192: [246, 66, 58],
+    16384: [269, 66, 60],
+    32768: [286, 68, 70],
+    65536: [305, 66, 54],
+    131072: [328, 81, 50],
+    262144: [348, 55, 48],
   };
-  const TOP_SOLID = 2048;
+  const TOP_SOLID = 262144;
 
   function hslToRgb(h, s, l) {
     const hh = h / 360;
@@ -84,10 +125,15 @@
     const fill = "hsl(" + hsl[0] + ", " + hsl[1] + "%, " + hsl[2] + "%)";
     const rgb = hslToRgb(hsl[0], hsl[1] / 100, hsl[2] / 100);
     const lum = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
-    return { fill: fill, text: lum > 0.45 ? "#171a1f" : "#ffffff" };
+    let text = "#ffffff";
+    if (lum > 0.45) {
+      text = "#171a1f";
+    }
+    return { fill: fill, text: text };
   }
 
-  // Linear size growth, exponential value labels.
+  // Linear size growth, exponential value labels. Units, so a tile is the
+  // same fraction of a given board on every device.
   const BASE_RADIUS = 16;
   const RADIUS_STEP = 4;
 
@@ -127,7 +173,13 @@
     World.add(engine.world, walls);
   }
   buildWalls();
-  window.addEventListener("resize", buildWalls);
+
+  // Only the canvas height in units moves on resize, so the tiles keep
+  // their coordinates and just the south wall shifts.
+  window.addEventListener("resize", function () {
+    layout();
+    buildWalls();
+  });
 
   const FRICTION_AIR = 0.0008;
   let nextId = 1;
@@ -147,14 +199,18 @@
   }
 
   function randomStartValue() {
-    return Math.random() < 0.8 ? 1 : 2;
+    if (Math.random() < 0.8) {
+      return 1;
+    }
+    return 2;
   }
 
-  // Grabbability is purely positional: any tile that hasn't crossed
-  // into the play area yet (body.crossedIntoPlay is falsy) is fair
-  // game to pick up, whatever it's doing. dragTarget is just whichever
-  // one a finger currently has hold of, if any.
+  // Grabbability is purely positional: any tile that hasn't crossed into
+  // the play area yet (body.crossedIntoPlay is falsy) is fair game to pick
+  // up, whatever it's doing. dragTarget is just whichever one a finger
+  // currently has hold of, if any.
   let dragTarget = null;
+  let dragging = false;
 
   function spawnTile() {
     const x = width / 2;
@@ -162,7 +218,15 @@
     return makeTile(x, y, randomStartValue());
   }
 
+  function clearTiles() {
+    for (const body of Matter.Composite.allBodies(engine.world)) {
+      if (body.isStatic || !body.value) continue;
+      World.remove(engine.world, body);
+    }
+  }
+
   // -------------------------- score --------------------------
+  // Best is shared across every board; only the save is per-board.
   const BEST_KEY = "yeetable.best";
   const bestEl = document.getElementById("best");
   let score = 0;
@@ -172,9 +236,13 @@
   } catch (e) {}
   bestEl.textContent = String(best);
 
-  function addScore(v) {
-    score += v;
+  function setScore(v) {
+    score = v;
     scoreEl.textContent = String(score);
+  }
+
+  function addScore(v) {
+    setScore(score + v);
     if (score > best) {
       best = score;
       bestEl.textContent = String(best);
@@ -184,28 +252,16 @@
     }
   }
 
-  // -------------------------- new game --------------------------
-  function newGame() {
-    for (const body of Matter.Composite.allBodies(engine.world)) {
-      if (body.isStatic || !body.value) continue;
-      World.remove(engine.world, body);
-    }
-    dragTarget = null;
-    dragging = false;
-    score = 0;
-    scoreEl.textContent = "0";
-    try {
-      localStorage.removeItem(SAVE_KEY);
-    } catch (e) {}
-    spawnTile();
-  }
-  document.getElementById("newgame").addEventListener("click", newGame);
-
   // -------------------------- save / restore --------------------------
   // Raw snapshot, mid-motion and all - no "wait until it settles" logic,
-  // just every tile's exact position/velocity/value dumped as-is.
-  const SAVE_KEY = "yeetable.save";
+  // just every tile's exact position/velocity/value dumped as-is. Board
+  // units, so a save means the same thing on any screen.
+  const SAVE_PREFIX = "yeetable.save.";
   const SAVE_INTERVAL = 30000;
+
+  function saveKey() {
+    return SAVE_PREFIX + board.key;
+  }
 
   function saveState() {
     const tiles = [];
@@ -220,8 +276,9 @@
         crossedIntoPlay: !!body.crossedIntoPlay,
       });
     }
+    const payload = { tiles: tiles, score: score };
     try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify({ tiles: tiles, score: score }));
+      localStorage.setItem(saveKey(), JSON.stringify(payload));
     } catch (e) {}
   }
   setInterval(saveState, SAVE_INTERVAL);
@@ -230,7 +287,7 @@
   function loadState() {
     let data = null;
     try {
-      const raw = localStorage.getItem(SAVE_KEY);
+      const raw = localStorage.getItem(saveKey());
       if (raw) data = JSON.parse(raw);
     } catch (e) {}
     if (!data || !Array.isArray(data.tiles) || !data.tiles.length) {
@@ -242,11 +299,60 @@
       body.crossedIntoPlay = !!t.crossedIntoPlay;
     }
     if (typeof data.score === "number") {
-      score = data.score;
-      scoreEl.textContent = String(score);
+      setScore(data.score);
     }
     return true;
   }
+
+  // -------------------------- new game --------------------------
+  function newGame() {
+    clearTiles();
+    dragTarget = null;
+    dragging = false;
+    setScore(0);
+    try {
+      localStorage.removeItem(saveKey());
+    } catch (e) {}
+    spawnTile();
+  }
+  document.getElementById("newgame").addEventListener("click", newGame);
+
+  // -------------------------- board switching --------------------------
+  // Each board keeps its own save, so switching parks the current one and
+  // resumes the other exactly where it was left. No reload: the board only
+  // feeds layout and the wall positions.
+  function switchBoard(key) {
+    const next = boardSpec(key);
+    if (!next || next.key === board.key) {
+      return;
+    }
+    saveState();
+    clearTiles();
+    dragTarget = null;
+    dragging = false;
+    board = next;
+    try {
+      localStorage.setItem(BOARD_KEY, board.key);
+    } catch (e) {}
+    layout();
+    buildWalls();
+    setScore(0);
+    if (!loadState()) {
+      spawnTile();
+    }
+  }
+
+  const boardSel = document.getElementById("boardsel");
+  for (const b of BOARDS) {
+    const opt = document.createElement("option");
+    opt.value = b.key;
+    opt.textContent = b.label;
+    boardSel.appendChild(opt);
+  }
+  boardSel.value = board.key;
+  boardSel.addEventListener("change", function () {
+    switchBoard(boardSel.value);
+  });
 
   if (!loadState()) {
     spawnTile();
@@ -283,10 +389,10 @@
     }
   });
 
-  // -------------------------- semi-permeable boundary --------------------------
+  // ------------------- semi-permeable boundary -------------------
   // The play-area/control-strip line: freely crossable on the way up,
-  // sealed shut once a tile is fully inside the play area. Not tied to
-  // any loss condition - this is the table itself.
+  // sealed shut once a tile is fully inside the play area. Not tied to any
+  // loss condition - this is the table itself.
   Events.on(engine, "afterUpdate", function () {
     const bodies = Matter.Composite.allBodies(engine.world);
     let anyInControl = false;
@@ -314,47 +420,50 @@
       }
     }
 
-    // Keep the control strip stocked - spawn a fresh tile only once
-    // it's completely empty of un-launched ones.
+    // Keep the control strip stocked - spawn a fresh tile only once it's
+    // completely empty of un-launched ones.
     if (!anyInControl) {
       spawnTile();
     }
   });
 
-  // -------------------------- dragging (pointer events) --------------------------
-  let dragging = false;
+  // ------------------ dragging (pointer events) ------------------
   let history = [];
 
+  // Client pixels in, board units out.
   function pointerPos(e) {
     const rect = canvas.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    return {
+      x: (e.clientX - rect.left) / scale,
+      y: (e.clientY - rect.top) / scale,
+    };
   }
 
   canvas.addEventListener("pointerdown", function (e) {
     if (dragging) return;
     const p = pointerPos(e);
     if (p.y <= playHeight) return;
-    // Any tap anywhere in the control area snaps the nearest tile
-    // still down there straight to the finger - no need to land the
-    // tap precisely on the tile itself.
+    // Any tap anywhere in the control area snaps the nearest tile still
+    // down there straight to the finger - no need to land the tap
+    // precisely on the tile itself.
     const bodies = Matter.Composite.allBodies(engine.world);
-    let best = null;
-    let bestDist = Infinity;
+    let pick = null;
+    let pickDist = Infinity;
     for (const body of bodies) {
       if (body.isStatic || !body.value || body.merging) continue;
       if (body.crossedIntoPlay) continue;
       const dx = p.x - body.position.x;
       const dy = p.y - body.position.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < bestDist) {
-        best = body;
-        bestDist = dist;
+      if (dist < pickDist) {
+        pick = body;
+        pickDist = dist;
       }
     }
-    if (!best) return;
-    dragTarget = best;
+    if (!pick) return;
+    dragTarget = pick;
     dragging = true;
-    const r = radiusFor(best.value);
+    const r = radiusFor(pick.value);
     const x = Math.min(Math.max(p.x, r), width - r);
     const y = Math.min(Math.max(p.y, playHeight + r), height - r);
     Body.setPosition(dragTarget, { x: x, y: y });
@@ -367,8 +476,8 @@
     if (!dragging || !dragTarget) return;
     const p = pointerPos(e);
     const r = radiusFor(dragTarget.value);
-    // Dragging is confined to the control strip - crossing into the
-    // play area only happens on release, via velocity, never by hand.
+    // Dragging is confined to the control strip - crossing into the play
+    // area only happens on release, via velocity, never by hand.
     const x = Math.min(Math.max(p.x, r), width - r);
     const y = Math.min(Math.max(p.y, playHeight + r), height - r);
     Body.setPosition(dragTarget, { x: x, y: y });
@@ -419,6 +528,7 @@
 
     // divider between play area and control strip
     ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1 / scale;
     ctx.strokeStyle = "#3c4b66";
     ctx.beginPath();
     ctx.moveTo(0, playHeight);
@@ -431,13 +541,14 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    ctx.font = "700 " + Math.max(20, width * 0.12) + "px system-ui, sans-serif";
+    ctx.font = "700 " + width * 0.12 + "px system-ui, sans-serif";
     ctx.fillText("table", width / 2, playHeight / 2);
 
     const controlMidY = playHeight + (height - playHeight) / 2;
-    const controlFontSize = Math.max(14, width * 0.06);
+    const controlFontSize = width * 0.06;
     ctx.font = "600 " + controlFontSize + "px system-ui, sans-serif";
-    ctx.fillText("control area", width / 2, controlMidY - controlFontSize * 0.7);
+    ctx.fillText("control area", width / 2,
+      controlMidY - controlFontSize * 0.7);
     ctx.font = "500 " + controlFontSize * 0.7 + "px system-ui, sans-serif";
     ctx.fillText("(throw with mouse or touch)", width / 2,
       controlMidY + controlFontSize * 0.3);
@@ -453,7 +564,7 @@
       ctx.fill();
 
       ctx.fillStyle = colours.text;
-      ctx.font = "600 " + Math.max(10, r * 0.55) + "px system-ui, sans-serif";
+      ctx.font = "600 " + r * 0.55 + "px system-ui, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(String(body.value), body.position.x, body.position.y);

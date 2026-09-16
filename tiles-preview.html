@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Yeetable Tiles</title>
+<style>
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 24px 16px 48px;
+    background: #12141a;
+    color: #eef0f5;
+    font-family: system-ui, sans-serif;
+  }
+
+  h1 {
+    font-size: 20px;
+    margin: 0 0 4px;
+  }
+
+  .sub {
+    color: #9aa3b3;
+    font-size: 13px;
+    margin: 0 0 28px;
+  }
+
+  h2 {
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #9aa3b3;
+    font-weight: 600;
+    margin: 0 0 14px;
+  }
+
+  section { margin-bottom: 40px; }
+
+  .scale {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 16px;
+    background: #171a21;
+    border-radius: 12px;
+    overflow-x: auto;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 16px;
+  }
+
+  .cell {
+    background: #171a21;
+    border-radius: 12px;
+    padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .tile {
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+
+  .meta {
+    font-family: Consolas, ui-monospace, monospace;
+    font-size: 11px;
+    color: #9aa3b3;
+    text-align: center;
+    line-height: 1.6;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .meta b {
+    color: #eef0f5;
+    font-weight: 600;
+  }
+
+  .boards {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .board-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .board {
+    position: relative;
+    background: #171a21;
+    border: 1px dashed #3c4b66;
+    border-radius: 6px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .board .tile {
+    position: absolute;
+  }
+
+  .warn { color: #d57234; }
+</style>
+</head>
+<body>
+
+<h1>Yeetable tiles</h1>
+<p class="sub">All 19 coloured tiers, at true pixel size. Pulled straight from <b>radiusFor()</b> and <b>tileColours()</b> in yeetable.js. Anything merged past 262144 keeps growing but reuses 262144's colour.</p>
+
+<section>
+  <h2>True scale</h2>
+  <div class="scale" id="scale"></div>
+</section>
+
+<section>
+  <h2>Big tiles on a 3:4 board</h2>
+  <p class="sub">Tile radii are absolute pixels, so the same tiles eat wildly different fractions of the table depending on how big <b>layout()</b> made it. Boards below are drawn at true pixel size.</p>
+  <div class="boards" id="boards"></div>
+</section>
+
+<section>
+  <h2>Each tile</h2>
+  <div class="grid" id="grid"></div>
+</section>
+
+<script>
+// copied verbatim from yeetable.js so this preview cannot drift
+const TILE_HSL = {
+  1: [0, 66, 84],
+  2: [0, 66, 66],
+  4: [0, 69, 55],
+  8: [23, 78, 52],
+  16: [41, 92, 49],
+  32: [56, 88, 56],
+  64: [80, 78, 52],
+  128: [128, 88, 43],
+  256: [152, 66, 60],
+  512: [189, 66, 59],
+  1024: [211, 80, 54],
+  2048: [224, 79, 51],
+  4096: [228, 92, 35],
+  8192: [246, 66, 58],
+  16384: [269, 66, 60],
+  32768: [286, 68, 70],
+  65536: [305, 66, 54],
+  131072: [328, 81, 50],
+  262144: [348, 55, 48],
+};
+const TOP_SOLID = 262144;
+
+function hslToRgb(h, s, l) {
+  const hh = h / 360;
+  const a = s * Math.min(l, 1 - l);
+  function channel(n) {
+    const k = (n + hh * 12) % 12;
+    return l - a * Math.max(-1, Math.min(Math.min(k - 3, 9 - k), 1));
+  }
+  return [channel(0), channel(8), channel(4)];
+}
+
+function tileColours(value) {
+  const hsl = TILE_HSL[value] || TILE_HSL[TOP_SOLID];
+  const fill = "hsl(" + hsl[0] + ", " + hsl[1] + "%, " + hsl[2] + "%)";
+  const rgb = hslToRgb(hsl[0], hsl[1] / 100, hsl[2] / 100);
+  const lum = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+  let text = "#ffffff";
+  if (lum > 0.45) {
+    text = "#171a1f";
+  }
+  return { fill: fill, text: text };
+}
+
+const BASE_RADIUS = 16;
+const RADIUS_STEP = 4;
+
+function radiusFor(value) {
+  const level = Math.round(Math.log2(value)) - 1;
+  return BASE_RADIUS + level * RADIUS_STEP;
+}
+
+// canvas uses "600 " + Math.max(10, r * 0.55) + "px system-ui"
+function fontFor(r) {
+  return Math.max(10, r * 0.55);
+}
+
+function makeTile(value) {
+  const r = radiusFor(value);
+  const colours = tileColours(value);
+  const el = document.createElement("div");
+  el.className = "tile";
+  el.style.width = (r * 2) + "px";
+  el.style.height = (r * 2) + "px";
+  el.style.background = colours.fill;
+  el.style.color = colours.text;
+  el.style.fontSize = fontFor(r) + "px";
+  el.textContent = String(value);
+  return el;
+}
+
+const values = Object.keys(TILE_HSL).map(Number).sort(function (a, b) {
+  return a - b;
+});
+
+const scale = document.getElementById("scale");
+const grid = document.getElementById("grid");
+
+for (const value of values) {
+  scale.appendChild(makeTile(value));
+
+  const r = radiusFor(value);
+  const colours = tileColours(value);
+  const hsl = TILE_HSL[value];
+
+  const cell = document.createElement("div");
+  cell.className = "cell";
+  cell.appendChild(makeTile(value));
+
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.innerHTML =
+    "<b>" + value + "</b><br>" +
+    "r " + r + " &middot; ⌀ " + (r * 2) + "<br>" +
+    "hsl(" + hsl[0] + " " + hsl[1] + "% " + hsl[2] + "%)<br>" +
+    "text " + colours.text;
+  cell.appendChild(meta);
+
+  grid.appendChild(cell);
+}
+
+// ---------------------- big tiles on a 3:4 board ----------------------
+const BOARD_SIZES = [[225, 300], [300, 400], [450, 600], [600, 800]];
+const BIG_VALUES = [262144, 131072, 65536, 32768, 16384, 8192, 1];
+const GAP = 6;
+
+// shelf-pack biggest first, same order every board so they compare
+function packBoard(w, vals) {
+  const placed = [];
+  let x = GAP;
+  let y = GAP;
+  let shelf = 0;
+  for (const value of vals) {
+    const d = radiusFor(value) * 2;
+    if (x > GAP && x + d + GAP > w) {
+      x = GAP;
+      y += shelf + GAP;
+      shelf = 0;
+    }
+    placed.push({ value: value, x: x, y: y, d: d });
+    x += d + GAP;
+    if (d > shelf) {
+      shelf = d;
+    }
+  }
+  return placed;
+}
+
+const boards = document.getElementById("boards");
+
+for (const size of BOARD_SIZES) {
+  const w = size[0];
+  const h = size[1];
+
+  const wrap = document.createElement("div");
+  wrap.className = "board-wrap";
+
+  const board = document.createElement("div");
+  board.className = "board";
+  board.style.width = w + "px";
+  board.style.height = h + "px";
+
+  const placed = packBoard(w, BIG_VALUES);
+  let tileArea = 0;
+  let clipped = 0;
+
+  for (const p of placed) {
+    const el = makeTile(p.value);
+    el.style.left = p.x + "px";
+    el.style.top = p.y + "px";
+    board.appendChild(el);
+
+    const r = p.d / 2;
+    tileArea += Math.PI * r * r;
+    if (p.x + p.d > w || p.y + p.d > h) {
+      clipped += 1;
+    }
+  }
+
+  wrap.appendChild(board);
+
+  const biggest = radiusFor(BIG_VALUES[0]) * 2;
+  const widthPct = Math.round((biggest / w) * 100);
+  const areaPct = Math.round((tileArea / (w * h)) * 100);
+
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  let html =
+    "<b>" + w + " &times; " + h + "</b><br>" +
+    "biggest " + biggest + "px = " + widthPct + "% of width<br>" +
+    "these 7 tiles fill " + areaPct + "% of the table";
+  if (clipped > 0) {
+    html += "<br><span class=\"warn\">" + clipped + " don't fit</span>";
+  }
+  meta.innerHTML = html;
+  wrap.appendChild(meta);
+
+  boards.appendChild(wrap);
+}
+</script>
+</body>
+</html>
