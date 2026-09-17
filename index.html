@@ -35,7 +35,19 @@
 <canvas id="board"></canvas>
 
 <div id="autowrap">
-  <div id="automenu" hidden>
+  <div id="idlemenu" class="popmenu" hidden>
+    <div class="speed">
+      <div class="speed-head">
+        <span>Launch every</span>
+        <output id="idleout"></output>
+      </div>
+      <div id="idletrack">
+        <div id="idlefill"></div>
+        <div class="thumb" id="thumbidle"></div>
+      </div>
+    </div>
+  </div>
+  <div id="automenu" class="popmenu" hidden>
     <button class="opt" type="button" data-opt="disableUntilOut"><span class="mark"></span>Disable until ball out</button>
     <button class="opt" type="button" data-opt="showWhenHidden"><span class="mark"></span>Show when UI hidden</button>
     <button class="opt" type="button" data-opt="infiniteBalls"><span class="mark"></span>Infinite Balls</button>
@@ -51,6 +63,7 @@
       </div>
     </div>
   </div>
+  <button id="idle">Idle</button>
   <button id="auto">Auto</button>
 </div>
 

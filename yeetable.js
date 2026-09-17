@@ -677,7 +677,14 @@
   // is the same fraction of the table on every board. Zero would never
   // arrive, but with no air drag any non-zero speed eventually does.
   const SPEED_FLOOR = 1;
-  const AUTO_FLAGS = ["disableUntilOut", "showWhenHidden", "infiniteBalls"];
+  const IDLE_MIN = 1;
+  const IDLE_MAX = 20;
+  const AUTO_FLAGS = [
+    "disableUntilOut",
+    "showWhenHidden",
+    "infiniteBalls",
+    "idleOn",
+  ];
 
   const autoOpts = {
     disableUntilOut: false,
@@ -685,10 +692,16 @@
     infiniteBalls: false,
     speedMin: 50,
     speedMax: 100,
+    idleOn: false,
+    idleSeconds: 4,
   };
 
   function clampPct(n) {
     return Math.min(Math.max(Math.round(n), SPEED_FLOOR), 100);
+  }
+
+  function clampIdle(n) {
+    return Math.min(Math.max(Math.round(n), IDLE_MIN), IDLE_MAX);
   }
 
   try {
@@ -706,6 +719,9 @@
       }
       if (autoOpts.speedMin > autoOpts.speedMax) {
         autoOpts.speedMin = autoOpts.speedMax;
+      }
+      if (typeof saved.idleSeconds === "number") {
+        autoOpts.idleSeconds = clampIdle(saved.idleSeconds);
       }
     }
   } catch (e) {}
@@ -807,12 +823,98 @@
   speedTrack.addEventListener("pointerup", endThumb);
   speedTrack.addEventListener("pointercancel", endThumb);
 
+  // -------------------------- idle --------------------------
+  // Auto on a timer. Every tick runs the same autoLaunch as a press, so
+  // pause, the speed range, the angle band and the three options all
+  // apply unchanged - a tick that lands on a closed gate simply does
+  // nothing and the next one tries again.
+  const idleBtn = document.getElementById("idle");
+  const idleMenu = document.getElementById("idlemenu");
+  const idleTrack = document.getElementById("idletrack");
+  const idleFill = document.getElementById("idlefill");
+  const idleThumb = document.getElementById("thumbidle");
+  const idleOut = document.getElementById("idleout");
+  let idleTimer = null;
+  let idleDragging = false;
+
+  function renderIdle() {
+    const span = IDLE_MAX - IDLE_MIN;
+    const t = ((autoOpts.idleSeconds - IDLE_MIN) / span) * 100;
+    idleThumb.style.left = t + "%";
+    idleFill.style.right = 100 - t + "%";
+    idleOut.textContent = autoOpts.idleSeconds + "s";
+    idleBtn.classList.toggle("on", autoOpts.idleOn);
+  }
+
+  function stopIdle() {
+    if (idleTimer === null) {
+      return;
+    }
+    window.clearInterval(idleTimer);
+    idleTimer = null;
+  }
+
+  function startIdle() {
+    stopIdle();
+    idleTimer = window.setInterval(autoLaunch, autoOpts.idleSeconds * 1000);
+  }
+
+  function applyIdle() {
+    if (autoOpts.idleOn) {
+      startIdle();
+    } else {
+      stopIdle();
+    }
+    renderIdle();
+  }
+
+  function idleFromEvent(e) {
+    const rect = idleTrack.getBoundingClientRect();
+    let t = (e.clientX - rect.left) / rect.width;
+    t = Math.min(Math.max(t, 0), 1);
+    return clampIdle(IDLE_MIN + t * (IDLE_MAX - IDLE_MIN));
+  }
+
+  idleTrack.addEventListener("pointerdown", function (e) {
+    idleDragging = true;
+    idleTrack.setPointerCapture(e.pointerId);
+    autoOpts.idleSeconds = idleFromEvent(e);
+    renderIdle();
+  });
+
+  idleTrack.addEventListener("pointermove", function (e) {
+    if (!idleDragging) return;
+    autoOpts.idleSeconds = idleFromEvent(e);
+    renderIdle();
+  });
+
+  function endIdleDrag() {
+    if (!idleDragging) return;
+    idleDragging = false;
+    saveAutoOpts();
+    // Restart on the new period rather than finishing the old one.
+    if (autoOpts.idleOn) {
+      startIdle();
+    }
+  }
+
+  idleTrack.addEventListener("pointerup", endIdleDrag);
+  idleTrack.addEventListener("pointercancel", endIdleDrag);
+
+  function toggleIdle() {
+    autoOpts.idleOn = !autoOpts.idleOn;
+    saveAutoOpts();
+    applyIdle();
+  }
+
   // Nothing in a control panel should ever start a native drag. Left
   // alone, the browser sometimes decides a grab in here is one and hands
   // back a floating ghost that fights the thumb you are actually moving.
-  autoMenu.addEventListener("dragstart", function (e) {
-    e.preventDefault();
-  });
+  for (const menu of [autoMenu, idleMenu]) {
+    menu.addEventListener("dragstart", function (e) {
+      e.preventDefault();
+    });
+  }
 
   function toggleAutoOpt(key) {
     autoOpts[key] = !autoOpts[key];
@@ -827,18 +929,66 @@
     });
   }
 
-  function openAutoMenu() {
-    autoMenu.hidden = false;
-  }
-
-  function closeAutoMenu() {
+  function closeMenus() {
     autoMenu.hidden = true;
+    idleMenu.hidden = true;
   }
 
-  // A long press must swallow the click that follows it, or opening the
-  // menu would also fire a ball.
-  let pressTimer = null;
-  let swallowClick = false;
+  function openMenu(menu) {
+    closeMenus();
+    menu.hidden = false;
+  }
+
+  // Long press or right-click opens the button's menu; a plain tap runs
+  // its action. The press has to swallow the click that follows it, or
+  // opening a menu would also trigger the button underneath.
+  function wirePressMenu(btn, menu, onTap) {
+    let timer = null;
+    let swallow = false;
+
+    function cancel() {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+    }
+
+    btn.addEventListener("pointerdown", function () {
+      swallow = false;
+      timer = window.setTimeout(function () {
+        timer = null;
+        swallow = true;
+        openMenu(menu);
+      }, LONG_PRESS_MS);
+    });
+
+    btn.addEventListener("pointerup", cancel);
+    btn.addEventListener("pointercancel", cancel);
+    btn.addEventListener("pointerleave", cancel);
+
+    btn.addEventListener("contextmenu", function (e) {
+      e.preventDefault();
+      cancel();
+      swallow = true;
+      openMenu(menu);
+    });
+
+    btn.addEventListener("click", function () {
+      if (swallow) {
+        swallow = false;
+        return;
+      }
+      if (!menu.hidden) {
+        closeMenus();
+        return;
+      }
+      onTap();
+    });
+  }
+
+  wirePressMenu(autoBtn, autoMenu, autoLaunch);
+  wirePressMenu(idleBtn, idleMenu, toggleIdle);
+
   let autoWasBlocked = false;
 
   // Cheap enough to ask every frame, but only touch the DOM on a change.
@@ -851,53 +1001,16 @@
     autoBtn.classList.toggle("cant", blocked);
   }
 
-  autoBtn.addEventListener("pointerdown", function () {
-    swallowClick = false;
-    pressTimer = window.setTimeout(function () {
-      pressTimer = null;
-      swallowClick = true;
-      openAutoMenu();
-    }, LONG_PRESS_MS);
-  });
-
-  function cancelPress() {
-    if (pressTimer !== null) {
-      window.clearTimeout(pressTimer);
-      pressTimer = null;
-    }
-  }
-
-  autoBtn.addEventListener("pointerup", cancelPress);
-  autoBtn.addEventListener("pointercancel", cancelPress);
-  autoBtn.addEventListener("pointerleave", cancelPress);
-
-  autoBtn.addEventListener("contextmenu", function (e) {
-    e.preventDefault();
-    cancelPress();
-    swallowClick = true;
-    openAutoMenu();
-  });
-
-  autoBtn.addEventListener("click", function () {
-    if (swallowClick) {
-      swallowClick = false;
-      return;
-    }
-    if (!autoMenu.hidden) {
-      closeAutoMenu();
-      return;
-    }
-    autoLaunch();
-  });
-
   document.addEventListener("pointerdown", function (e) {
-    if (autoMenu.hidden) return;
+    if (autoMenu.hidden && idleMenu.hidden) return;
     if (autoMenu.contains(e.target)) return;
-    if (e.target === autoBtn) return;
-    closeAutoMenu();
+    if (idleMenu.contains(e.target)) return;
+    if (e.target === autoBtn || e.target === idleBtn) return;
+    closeMenus();
   });
 
   renderAutoOpts();
+  applyIdle();
 
   // -------------------------- hide the ui --------------------------
   // One flag, two jobs: a class that drops the DOM overlays, and a check

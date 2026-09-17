@@ -65,7 +65,9 @@ html, body {
   position: fixed;
   bottom: 14px;
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
   padding: 0 10px;
   pointer-events: none;
   z-index: 2;
@@ -118,8 +120,9 @@ body.ui-hidden.auto-always #autowrap {
   display: flex;
 }
 
-/* Auto's long-press / right-click menu, anchored above the button. */
-#automenu {
+/* The long-press / right-click menus, anchored above their buttons. Only
+   one is ever open, so they can share the same spot. */
+.popmenu {
   position: absolute;
   right: 10px;
   bottom: calc(100% + 8px);
@@ -133,12 +136,12 @@ body.ui-hidden.auto-always #autowrap {
   border-radius: 10px;
 }
 
-/* An id selector beats [hidden], so restate it. */
-#automenu[hidden] {
+/* A class selector beats the UA's [hidden] rule, so restate it. */
+.popmenu[hidden] {
   display: none;
 }
 
-#automenu .opt {
+.popmenu .opt {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -153,22 +156,22 @@ body.ui-hidden.auto-always #autowrap {
   text-align: left;
 }
 
-#automenu .opt:active {
+.popmenu .opt:active {
   background: rgba(255, 255, 255, 0.12);
 }
 
-#automenu .mark {
+.popmenu .mark {
   width: 1.1em;
   flex-shrink: 0;
   font-weight: 700;
   color: #9aa3b3;
 }
 
-#automenu .opt.on .mark {
+.popmenu .opt.on .mark {
   color: #6fd08c;
 }
 
-#automenu .speed {
+.popmenu .speed {
   margin-top: 4px;
   padding: 10px 8px 4px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
@@ -191,7 +194,8 @@ body.ui-hidden.auto-always #autowrap {
 
 /* Two thumbs on one track. They clamp against each other, so meeting in
    the middle is a valid state and means one fixed speed. */
-#speedtrack {
+#speedtrack,
+#idletrack {
   position: relative;
   height: 4px;
   margin: 0 11px 10px;
@@ -200,15 +204,18 @@ body.ui-hidden.auto-always #autowrap {
   touch-action: none;
 }
 
-#speedfill {
+#speedfill,
+#idlefill {
   position: absolute;
   top: 0;
   bottom: 0;
+  left: 0;
   border-radius: 2px;
   background: #6fd08c;
 }
 
-#speedtrack .thumb {
+#speedtrack .thumb,
+#idletrack .thumb {
   position: absolute;
   top: 50%;
   width: 22px;
@@ -223,6 +230,13 @@ body.ui-hidden.auto-always #autowrap {
 /* Blocked by "Disable until ball out". */
 #autowrap button.cant {
   opacity: 0.4;
+}
+
+/* Idle is running. */
+#autowrap > button.on {
+  background: rgba(111, 208, 140, 0.22);
+  border-color: rgba(111, 208, 140, 0.55);
+  color: #b8f0c9;
 }
 
 /* Recedes while hiding, but still findable. */
