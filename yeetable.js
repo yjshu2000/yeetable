@@ -234,7 +234,7 @@
   function spawnPoint() {
     return {
       x: width / 2,
-      y: playHeight + (height - playHeight) * 0.5,
+      y: playHeight + (height - playHeight) * 0.66,
     };
   }
 
