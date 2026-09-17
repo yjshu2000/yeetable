@@ -11,14 +11,22 @@
 <body>
 
 <div id="hud">
-  <div class="hud-stats">
-    <div class="hud-stat">
-      <div class="k">Score</div>
-      <div class="v" id="score">0</div>
+  <div class="hud-left">
+    <div class="more-pick">
+      <button id="moreopts" type="button">More options</button>
+      <div id="moremenu" class="popmenu" hidden>
+        <button class="opt" type="button" data-gopt="pauseOnBlur"><span class="mark"></span>Pause when unfocused</button>
+      </div>
     </div>
-    <div class="hud-stat">
-      <div class="k">Best</div>
-      <div class="v" id="best">0</div>
+    <div class="hud-stats">
+      <div class="hud-stat">
+        <div class="k">Score</div>
+        <div class="v" id="score">0</div>
+      </div>
+      <div class="hud-stat">
+        <div class="k">Best</div>
+        <div class="v" id="best">0</div>
+      </div>
     </div>
   </div>
   <div class="hud-actions">

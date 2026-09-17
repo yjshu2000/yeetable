@@ -234,7 +234,7 @@
   function spawnPoint() {
     return {
       x: width / 2,
-      y: playHeight + (height - playHeight) * 0.7,
+      y: playHeight + (height - playHeight) * 0.5,
     };
   }
 
@@ -929,9 +929,49 @@
     });
   }
 
+  const moreMenu = document.getElementById("moremenu");
+
+  // Game-wide settings, kept apart from the Auto button's own options.
+  const GAME_OPTS_KEY = "yeetable.opts";
+  const GAME_FLAGS = ["pauseOnBlur"];
+  const gameOpts = {
+    pauseOnBlur: true,
+  };
+
+  try {
+    const raw = localStorage.getItem(GAME_OPTS_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      for (const key of GAME_FLAGS) {
+        if (typeof saved[key] === "boolean") {
+          gameOpts[key] = saved[key];
+        }
+      }
+    }
+  } catch (e) {}
+
+  function saveGameOpts() {
+    try {
+      localStorage.setItem(GAME_OPTS_KEY, JSON.stringify(gameOpts));
+    } catch (e) {}
+  }
+
+  function renderGameOpts() {
+    for (const row of moreMenu.querySelectorAll(".opt")) {
+      const on = gameOpts[row.dataset.gopt];
+      row.classList.toggle("on", on);
+      let mark = "✗";
+      if (on) {
+        mark = "✓";
+      }
+      row.querySelector(".mark").textContent = mark;
+    }
+  }
+
   function closeMenus() {
     autoMenu.hidden = true;
     idleMenu.hidden = true;
+    moreMenu.hidden = true;
   }
 
   function openMenu(menu) {
@@ -1001,12 +1041,30 @@
     autoBtn.classList.toggle("cant", blocked);
   }
 
+  const moreBtn = document.getElementById("moreopts");
+
   document.addEventListener("pointerdown", function (e) {
-    if (autoMenu.hidden && idleMenu.hidden) return;
+    if (autoMenu.hidden && idleMenu.hidden && moreMenu.hidden) return;
     if (autoMenu.contains(e.target)) return;
     if (idleMenu.contains(e.target)) return;
+    if (moreMenu.contains(e.target)) return;
     if (e.target === autoBtn || e.target === idleBtn) return;
+    if (e.target === moreBtn) return;
     closeMenus();
+  });
+
+  // Plain tap, unlike Auto and Idle - this button has no action of its
+  // own, so the menu is the whole point of pressing it.
+  moreBtn.addEventListener("click", function () {
+    if (!moreMenu.hidden) {
+      closeMenus();
+      return;
+    }
+    openMenu(moreMenu);
+  });
+
+  moreMenu.addEventListener("dragstart", function (e) {
+    e.preventDefault();
   });
 
   renderAutoOpts();
@@ -1079,13 +1137,32 @@
   // listeners can't drift out of sync with each other. visibilitychange
   // alone misses a window that is still visible but no longer focused.
   function refreshFocus() {
-    blurPause = document.hidden || !document.hasFocus();
+    blurPause = false;
+    if (gameOpts.pauseOnBlur) {
+      blurPause = document.hidden || !document.hasFocus();
+    }
     applyPause();
   }
 
   window.addEventListener("blur", refreshFocus);
   window.addEventListener("focus", refreshFocus);
   document.addEventListener("visibilitychange", refreshFocus);
+
+  // ---------------------- more options ----------------------
+  // Settings that belong to the game rather than to the Auto button, so
+  // they keep their own store.
+  for (const row of moreMenu.querySelectorAll(".opt")) {
+    row.addEventListener("click", function (e) {
+      e.stopPropagation();
+      const key = row.dataset.gopt;
+      gameOpts[key] = !gameOpts[key];
+      saveGameOpts();
+      renderGameOpts();
+      refreshFocus();
+    });
+  }
+
+  renderGameOpts();
   refreshFocus();
 
   function draw() {
