@@ -44,6 +44,8 @@
   const ctx = canvas.getContext("2d");
   const scoreEl = document.getElementById("score");
   const hud = document.getElementById("hud");
+  const autoWrap = document.getElementById("autowrap");
+  const eyeWrap = document.getElementById("eyewrap");
 
   // Everything below this line is in board units, never pixels. `scale` is
   // the only bridge between the two, and only layout, drawing and pointer
@@ -80,6 +82,12 @@
     hud.style.left = "50%";
     hud.style.width = wPx + "px";
     hud.style.transform = "translateX(-50%)";
+    autoWrap.style.left = "50%";
+    autoWrap.style.width = wPx + "px";
+    autoWrap.style.transform = "translateX(-50%)";
+    eyeWrap.style.left = "50%";
+    eyeWrap.style.width = wPx + "px";
+    eyeWrap.style.transform = "translateX(-50%)";
   }
   layout();
 
@@ -184,6 +192,9 @@
   // No air drag at all - the only things that bleed energy now are the solver's
   // contact losses and merges averaging two velocities into one.
   const FRICTION_AIR = 0;
+  // Shared by the thrown release and the Auto button, so both cap at one
+  // number rather than drifting apart.
+  const MAX_SPEED = 60;
   let nextId = 1;
 
   function makeTile(x, y, value) {
@@ -220,10 +231,16 @@
   // silently killing autosave.
   let paused = false;
 
+  function spawnPoint() {
+    return {
+      x: width / 2,
+      y: playHeight + (height - playHeight) * 0.7,
+    };
+  }
+
   function spawnTile() {
-    const x = width / 2;
-    const y = playHeight + (height - playHeight) * 0.7;
-    return makeTile(x, y, randomStartValue());
+    const p = spawnPoint();
+    return makeTile(p.x, p.y, randomStartValue());
   }
 
   function clearTiles() {
@@ -231,6 +248,9 @@
       if (body.isStatic || !body.value) continue;
       World.remove(engine.world, body);
     }
+    // A removed tile can never cross, so a stale pending would block Auto
+    // for good.
+    autoPending = null;
   }
 
   // -------------------------- score --------------------------
@@ -380,6 +400,10 @@
       if (a.merging || b.merging) continue;
       if (a.value !== b.value) continue;
       if (a === dragTarget || b === dragTarget) continue;
+      // Merging is the table's job. Two tiles loose in the control strip
+      // just bounce off each other - otherwise Infinite Balls turns the
+      // strip into a second board you never have to throw from.
+      if (!a.crossedIntoPlay && !b.crossedIntoPlay) continue;
 
       a.merging = true;
       b.merging = true;
@@ -389,6 +413,12 @@
       const vx = (a.velocity.x + b.velocity.x) / 2;
       const vy = (a.velocity.y + b.velocity.y) / 2;
       const newValue = a.value * 2;
+
+      // Auto's gate waits on a specific body crossing the line. A merged
+      // parent is out of the world and never will, so stop waiting on it.
+      if (a === autoPending || b === autoPending) {
+        autoPending = null;
+      }
 
       World.remove(engine.world, [a, b]);
       const merged = makeTile(midX, midY, newValue);
@@ -512,7 +542,6 @@
       vx = ((last.x - first.x) / dt) * (1000 / 60);
       vy = ((last.y - first.y) / dt) * (1000 / 60);
     }
-    const MAX_SPEED = 60;
     const speed = Math.sqrt(vx * vx + vy * vy);
     if (speed > MAX_SPEED) {
       vx = (vx / speed) * MAX_SPEED;
@@ -525,6 +554,367 @@
 
   canvas.addEventListener("pointerup", releaseDrag);
   canvas.addEventListener("pointercancel", releaseDrag);
+
+  // -------------------------- auto launch --------------------------
+  // A throw without a swipe. Direction is uniform over the circle minus a
+  // band either side of the horizontal - with no air drag, a shallow shot
+  // just rattles wall to wall forever without ever climbing to the table.
+  const SHALLOW_BAND = 10 * (Math.PI / 180);
+
+  function randomLaunchAngle() {
+    const arc = Math.PI - SHALLOW_BAND * 2;
+    const pick = Math.random() * arc * 2;
+    if (pick < arc) {
+      return SHALLOW_BAND + pick;
+    }
+    return Math.PI + SHALLOW_BAND + (pick - arc);
+  }
+
+  // A fresh ball's own footprint at the spawn point; anything overlapping
+  // that counts as sitting in the spawn area.
+  const SPAWN_AREA = BASE_RADIUS;
+
+  function tileInSpawnArea() {
+    const p = spawnPoint();
+    let pick = null;
+    let pickDist = Infinity;
+    for (const body of Matter.Composite.allBodies(engine.world)) {
+      if (body.isStatic || !body.value || body.merging) continue;
+      if (body.crossedIntoPlay) continue;
+      const dx = body.position.x - p.x;
+      const dy = body.position.y - p.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > body.circleRadius + SPAWN_AREA) continue;
+      if (dist < pickDist) {
+        pick = body;
+        pickDist = dist;
+      }
+    }
+    return pick;
+  }
+
+  function findUnlaunched() {
+    for (const body of Matter.Composite.allBodies(engine.world)) {
+      if (body.isStatic || !body.value || body.merging) continue;
+      if (body.crossedIntoPlay) continue;
+      return body;
+    }
+    return null;
+  }
+
+  // The tile this button last fired, held until it clears the boundary.
+  // Gating on "any un-launched tile exists" would disable Auto forever,
+  // since afterUpdate restocks the strip the moment it empties.
+  let autoPending = null;
+
+  function autoBlocked() {
+    if (!autoOpts.disableUntilOut) {
+      return false;
+    }
+    if (!autoPending) {
+      return false;
+    }
+    if (autoPending.crossedIntoPlay) {
+      autoPending = null;
+      return false;
+    }
+    return true;
+  }
+
+  function autoLaunch() {
+    if (paused) return;
+    if (autoBlocked()) return;
+
+    let tile = null;
+    if (autoOpts.infiniteBalls) {
+      // Throw whoever is standing on the spawn point, and only make a new
+      // ball when nobody is. Creating one on top of another would have
+      // Matter resolve the overlap with a separation impulse landing on
+      // top of the launch velocity, well past MAX_SPEED. Fired in place,
+      // since it is already where it needs to be.
+      tile = tileInSpawnArea();
+      if (!tile) {
+        tile = spawnTile();
+      }
+      if (tile === dragTarget) {
+        dragging = false;
+        dragTarget = null;
+      }
+    } else {
+      tile = findUnlaunched();
+      if (!tile) return;
+      // Takes over a tile already loose down there, finger or not.
+      if (tile === dragTarget) {
+        dragging = false;
+        dragTarget = null;
+      }
+      const p = spawnPoint();
+      Body.setPosition(tile, { x: p.x, y: p.y });
+    }
+
+    const angle = randomLaunchAngle();
+    const lo = autoOpts.speedMin / 100;
+    const hi = autoOpts.speedMax / 100;
+    // Thumbs together collapses this to a constant, which is the fixed
+    // speed case falling out for free.
+    const speed = MAX_SPEED * (lo + Math.random() * (hi - lo));
+    Body.setVelocity(tile, {
+      x: Math.cos(angle) * speed,
+      y: Math.sin(angle) * speed,
+    });
+    autoPending = tile;
+  }
+
+  // ------------------------ auto options ------------------------
+  // Long-press or right-click Auto. Wording never changes; the leading
+  // mark carries the state. All three combine freely.
+  const AUTO_OPTS_KEY = "yeetable.autoopts";
+  const LONG_PRESS_MS = 450;
+  const autoBtn = document.getElementById("auto");
+  const autoMenu = document.getElementById("automenu");
+
+  // Percentages of MAX_SPEED, which is in board units - so a given percent
+  // is the same fraction of the table on every board. Zero would never
+  // arrive, but with no air drag any non-zero speed eventually does.
+  const SPEED_FLOOR = 1;
+  const AUTO_FLAGS = ["disableUntilOut", "showWhenHidden", "infiniteBalls"];
+
+  const autoOpts = {
+    disableUntilOut: false,
+    showWhenHidden: false,
+    infiniteBalls: false,
+    speedMin: 50,
+    speedMax: 100,
+  };
+
+  function clampPct(n) {
+    return Math.min(Math.max(Math.round(n), SPEED_FLOOR), 100);
+  }
+
+  try {
+    const raw = localStorage.getItem(AUTO_OPTS_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      for (const key of AUTO_FLAGS) {
+        autoOpts[key] = !!saved[key];
+      }
+      if (typeof saved.speedMin === "number") {
+        autoOpts.speedMin = clampPct(saved.speedMin);
+      }
+      if (typeof saved.speedMax === "number") {
+        autoOpts.speedMax = clampPct(saved.speedMax);
+      }
+      if (autoOpts.speedMin > autoOpts.speedMax) {
+        autoOpts.speedMin = autoOpts.speedMax;
+      }
+    }
+  } catch (e) {}
+
+  function saveAutoOpts() {
+    try {
+      localStorage.setItem(AUTO_OPTS_KEY, JSON.stringify(autoOpts));
+    } catch (e) {}
+  }
+
+  function renderAutoOpts() {
+    for (const row of autoMenu.querySelectorAll(".opt")) {
+      const on = autoOpts[row.dataset.opt];
+      row.classList.toggle("on", on);
+      let mark = "✗";
+      if (on) {
+        mark = "✓";
+      }
+      row.querySelector(".mark").textContent = mark;
+    }
+    document.body.classList.toggle("auto-always", autoOpts.showWhenHidden);
+    renderSpeed();
+  }
+
+  // ------------------------ speed slider ------------------------
+  const speedTrack = document.getElementById("speedtrack");
+  const speedFill = document.getElementById("speedfill");
+  const thumbMin = document.getElementById("thumbmin");
+  const thumbMax = document.getElementById("thumbmax");
+  const speedOut = document.getElementById("speedout");
+  let dragThumb = null;
+
+  function pctToTrack(pct) {
+    return ((pct - SPEED_FLOOR) / (100 - SPEED_FLOOR)) * 100;
+  }
+
+  function renderSpeed() {
+    const lo = pctToTrack(autoOpts.speedMin);
+    const hi = pctToTrack(autoOpts.speedMax);
+    thumbMin.style.left = lo + "%";
+    thumbMax.style.left = hi + "%";
+    speedFill.style.left = lo + "%";
+    speedFill.style.right = 100 - hi + "%";
+    let label = autoOpts.speedMin + "–" + autoOpts.speedMax + "%";
+    if (autoOpts.speedMin === autoOpts.speedMax) {
+      label = autoOpts.speedMin + "%";
+    }
+    speedOut.textContent = label;
+  }
+
+  function pctFromEvent(e) {
+    const rect = speedTrack.getBoundingClientRect();
+    let t = (e.clientX - rect.left) / rect.width;
+    t = Math.min(Math.max(t, 0), 1);
+    return clampPct(SPEED_FLOOR + t * (100 - SPEED_FLOOR));
+  }
+
+  // Each thumb clamps against the other, so they can never swap places.
+  function moveThumb(pct) {
+    if (dragThumb === "min") {
+      autoOpts.speedMin = Math.min(pct, autoOpts.speedMax);
+    } else {
+      autoOpts.speedMax = Math.max(pct, autoOpts.speedMin);
+    }
+    renderSpeed();
+  }
+
+  speedTrack.addEventListener("pointerdown", function (e) {
+    const pct = pctFromEvent(e);
+    const dMin = Math.abs(pct - autoOpts.speedMin);
+    const dMax = Math.abs(pct - autoOpts.speedMax);
+    if (dMin < dMax) {
+      dragThumb = "min";
+    } else if (dMax < dMin) {
+      dragThumb = "max";
+    } else if (pct > autoOpts.speedMin) {
+      // Sitting on top of each other; let the direction of the grab pick.
+      dragThumb = "max";
+    } else {
+      dragThumb = "min";
+    }
+    // Capture, so straying off the track mid-drag neither loses the thumb
+    // nor reaches the handler that closes the menu.
+    speedTrack.setPointerCapture(e.pointerId);
+    moveThumb(pct);
+  });
+
+  speedTrack.addEventListener("pointermove", function (e) {
+    if (!dragThumb) return;
+    moveThumb(pctFromEvent(e));
+  });
+
+  function endThumb() {
+    if (!dragThumb) return;
+    dragThumb = null;
+    saveAutoOpts();
+  }
+
+  speedTrack.addEventListener("pointerup", endThumb);
+  speedTrack.addEventListener("pointercancel", endThumb);
+
+  // Nothing in a control panel should ever start a native drag. Left
+  // alone, the browser sometimes decides a grab in here is one and hands
+  // back a floating ghost that fights the thumb you are actually moving.
+  autoMenu.addEventListener("dragstart", function (e) {
+    e.preventDefault();
+  });
+
+  function toggleAutoOpt(key) {
+    autoOpts[key] = !autoOpts[key];
+    saveAutoOpts();
+    renderAutoOpts();
+  }
+
+  for (const row of autoMenu.querySelectorAll(".opt")) {
+    row.addEventListener("click", function (e) {
+      e.stopPropagation();
+      toggleAutoOpt(row.dataset.opt);
+    });
+  }
+
+  function openAutoMenu() {
+    autoMenu.hidden = false;
+  }
+
+  function closeAutoMenu() {
+    autoMenu.hidden = true;
+  }
+
+  // A long press must swallow the click that follows it, or opening the
+  // menu would also fire a ball.
+  let pressTimer = null;
+  let swallowClick = false;
+  let autoWasBlocked = false;
+
+  // Cheap enough to ask every frame, but only touch the DOM on a change.
+  function refreshAutoBlocked() {
+    const blocked = autoBlocked();
+    if (blocked === autoWasBlocked) {
+      return;
+    }
+    autoWasBlocked = blocked;
+    autoBtn.classList.toggle("cant", blocked);
+  }
+
+  autoBtn.addEventListener("pointerdown", function () {
+    swallowClick = false;
+    pressTimer = window.setTimeout(function () {
+      pressTimer = null;
+      swallowClick = true;
+      openAutoMenu();
+    }, LONG_PRESS_MS);
+  });
+
+  function cancelPress() {
+    if (pressTimer !== null) {
+      window.clearTimeout(pressTimer);
+      pressTimer = null;
+    }
+  }
+
+  autoBtn.addEventListener("pointerup", cancelPress);
+  autoBtn.addEventListener("pointercancel", cancelPress);
+  autoBtn.addEventListener("pointerleave", cancelPress);
+
+  autoBtn.addEventListener("contextmenu", function (e) {
+    e.preventDefault();
+    cancelPress();
+    swallowClick = true;
+    openAutoMenu();
+  });
+
+  autoBtn.addEventListener("click", function () {
+    if (swallowClick) {
+      swallowClick = false;
+      return;
+    }
+    if (!autoMenu.hidden) {
+      closeAutoMenu();
+      return;
+    }
+    autoLaunch();
+  });
+
+  document.addEventListener("pointerdown", function (e) {
+    if (autoMenu.hidden) return;
+    if (autoMenu.contains(e.target)) return;
+    if (e.target === autoBtn) return;
+    closeAutoMenu();
+  });
+
+  renderAutoOpts();
+
+  // -------------------------- hide the ui --------------------------
+  // One flag, two jobs: a class that drops the DOM overlays, and a check
+  // in draw() for the painted labels. Deliberately not persisted - a
+  // reload always comes back with the interface showing.
+  let uiHidden = false;
+  const eyeBtn = document.getElementById("eye");
+
+  eyeBtn.addEventListener("click", function () {
+    uiHidden = !uiHidden;
+    document.body.classList.toggle("ui-hidden", uiHidden);
+    if (uiHidden) {
+      eyeBtn.setAttribute("aria-label", "Show interface");
+    } else {
+      eyeBtn.setAttribute("aria-label", "Hide interface");
+    }
+  });
 
   // Background label colours - the table label sits behind moving tiles so it
   // stays faint; the control strip's sits on empty space and can take more
@@ -586,6 +976,7 @@
   refreshFocus();
 
   function draw() {
+    refreshAutoBlocked();
     ctx.clearRect(0, 0, width, height);
 
     // table surface
@@ -605,22 +996,24 @@
     ctx.setLineDash([]);
 
     // background tutorial labels, sitting behind the tiles
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    if (!uiHidden) {
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
 
-    ctx.fillStyle = TABLE_LABEL;
-    ctx.font = "700 " + width * 0.12 + "px system-ui, sans-serif";
-    ctx.fillText("table", width / 2, playHeight / 2);
+      ctx.fillStyle = TABLE_LABEL;
+      ctx.font = "700 " + width * 0.12 + "px system-ui, sans-serif";
+      ctx.fillText("table", width / 2, playHeight / 2);
 
-    const controlMidY = playHeight + (height - playHeight) / 2;
-    const controlFontSize = width * 0.06;
-    ctx.fillStyle = CONTROL_LABEL;
-    ctx.font = "600 " + controlFontSize + "px system-ui, sans-serif";
-    ctx.fillText("control area", width / 2,
-      controlMidY - controlFontSize * 0.7);
-    ctx.font = "500 " + controlFontSize * 0.7 + "px system-ui, sans-serif";
-    ctx.fillText("(throw with mouse or touch)", width / 2,
-      controlMidY + controlFontSize * 0.3);
+      const controlMidY = playHeight + (height - playHeight) / 2;
+      const controlFontSize = width * 0.06;
+      ctx.fillStyle = CONTROL_LABEL;
+      ctx.font = "600 " + controlFontSize + "px system-ui, sans-serif";
+      ctx.fillText("control area", width / 2,
+        controlMidY - controlFontSize * 0.7);
+      ctx.font = "500 " + controlFontSize * 0.7 + "px system-ui, sans-serif";
+      ctx.fillText("(throw with mouse or touch)", width / 2,
+        controlMidY + controlFontSize * 0.3);
+    }
 
     const bodies = Matter.Composite.allBodies(engine.world);
     for (const body of bodies) {

@@ -59,7 +59,179 @@ html, body {
   font-variant-numeric: tabular-nums;
 }
 
-.hud-actions button {
+/* Sits over the control strip, where a thumb already is. Positioned off
+   the canvas footprint by layout(), same as the HUD. */
+#autowrap {
+  position: fixed;
+  bottom: 14px;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 10px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Bottom-left, mirroring Auto. The one control that never hides, since
+   it is the only way back. */
+#eyewrap {
+  position: fixed;
+  bottom: 14px;
+  display: flex;
+  justify-content: flex-start;
+  padding: 0 10px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+#eyewrap button {
+  pointer-events: auto;
+  display: flex;
+  background: none;
+  border: 0;
+  padding: 6px;
+  color: #eef0f5;
+  opacity: 0.55;
+}
+
+/* Both icons are swapped by the body class alone. `hidden` is an IDL
+   attribute of HTMLElement, not SVGElement, so setting el.hidden on an
+   <svg> writes a plain JS property that CSS never sees. */
+#icon-show {
+  display: none;
+}
+
+body.ui-hidden #icon-hide {
+  display: none;
+}
+
+body.ui-hidden #icon-show {
+  display: block;
+}
+
+body.ui-hidden #hud,
+body.ui-hidden #autowrap {
+  display: none;
+}
+
+/* "Show when UI hidden" - the one overlay allowed to stay. */
+body.ui-hidden.auto-always #autowrap {
+  display: flex;
+}
+
+/* Auto's long-press / right-click menu, anchored above the button. */
+#automenu {
+  position: absolute;
+  right: 10px;
+  bottom: calc(100% + 8px);
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 210px;
+  padding: 5px;
+  background: #1c2029;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+}
+
+/* An id selector beats [hidden], so restate it. */
+#automenu[hidden] {
+  display: none;
+}
+
+#automenu .opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  padding: 9px 8px;
+  color: #eef0f5;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+}
+
+#automenu .opt:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+#automenu .mark {
+  width: 1.1em;
+  flex-shrink: 0;
+  font-weight: 700;
+  color: #9aa3b3;
+}
+
+#automenu .opt.on .mark {
+  color: #6fd08c;
+}
+
+#automenu .speed {
+  margin-top: 4px;
+  padding: 10px 8px 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.speed-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  color: #9aa3b3;
+  margin-bottom: 16px;
+}
+
+.speed-head output {
+  color: #eef0f5;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Two thumbs on one track. They clamp against each other, so meeting in
+   the middle is a valid state and means one fixed speed. */
+#speedtrack {
+  position: relative;
+  height: 4px;
+  margin: 0 11px 10px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.16);
+  touch-action: none;
+}
+
+#speedfill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+  background: #6fd08c;
+}
+
+#speedtrack .thumb {
+  position: absolute;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  margin-left: -11px;
+  margin-top: -11px;
+  border-radius: 50%;
+  background: #eef0f5;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* Blocked by "Disable until ball out". */
+#autowrap button.cant {
+  opacity: 0.4;
+}
+
+/* Recedes while hiding, but still findable. */
+body.ui-hidden #eyewrap button {
+  opacity: 0.22;
+}
+
+.hud-actions button,
+#autowrap > button {
   pointer-events: auto;
   background: rgba(255, 255, 255, 0.1);
   color: #eef0f5;
@@ -71,8 +243,14 @@ html, body {
   font-family: inherit;
 }
 
-.hud-actions button:active {
+.hud-actions button:active,
+#autowrap > button:active {
   background: rgba(255, 255, 255, 0.2);
+}
+
+#autowrap > button {
+  user-select: none;
+  touch-action: none;
 }
 
 /* The visible control is the button; the select sits invisibly on top so

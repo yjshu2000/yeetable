@@ -34,6 +34,40 @@
 
 <canvas id="board"></canvas>
 
+<div id="autowrap">
+  <div id="automenu" hidden>
+    <button class="opt" type="button" data-opt="disableUntilOut"><span class="mark"></span>Disable until ball out</button>
+    <button class="opt" type="button" data-opt="showWhenHidden"><span class="mark"></span>Show when UI hidden</button>
+    <button class="opt" type="button" data-opt="infiniteBalls"><span class="mark"></span>Infinite Balls</button>
+    <div class="speed">
+      <div class="speed-head">
+        <span>Launch speed</span>
+        <output id="speedout"></output>
+      </div>
+      <div id="speedtrack">
+        <div id="speedfill"></div>
+        <div class="thumb" id="thumbmin"></div>
+        <div class="thumb" id="thumbmax"></div>
+      </div>
+    </div>
+  </div>
+  <button id="auto">Auto</button>
+</div>
+
+<div id="eyewrap">
+  <button id="eye" type="button" aria-label="Hide interface">
+    <svg id="icon-hide" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/>
+      <circle cx="12" cy="12" r="3.2"/>
+      <line x1="3.5" y1="20.5" x2="20.5" y2="3.5"/>
+    </svg>
+    <svg id="icon-show" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/>
+      <circle cx="12" cy="12" r="3.2"/>
+    </svg>
+  </button>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
 <script src="yeetable.js"></script>
 </body>
