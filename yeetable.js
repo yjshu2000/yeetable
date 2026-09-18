@@ -2,10 +2,10 @@
   "use strict";
 
   // -------------------------- boards --------------------------
-  // A board is a virtual coordinate space, not a screen size. The canvas
-  // always fills the same rectangle; picking a smaller board just means
-  // fewer units span it, so the fixed-unit tiles are drawn larger and the
-  // table effectively holds less. Nothing about the layout moves.
+  // A board is a virtual coordinate space, not a screen size. The canvas always
+  // fills the same rectangle; picking a smaller board just means fewer units
+  // span it, so the fixed-unit tiles are drawn larger and the table effectively
+  // holds less. Nothing about the layout moves.
   const BOARDS = [
     { key: "300", label: "300 × 400", w: 300, h: 400 },
     { key: "360", label: "360 × 480", w: 360, h: 480 },
@@ -31,8 +31,8 @@
   }
 
   // -------------------------- layout --------------------------
-  // Table is 3:4 (width:height) - the final pick. No loss condition yet;
-  // this build is for feeling out the physics.
+  // Table is 3:4 (width:height) - the final pick. No loss condition yet; this
+  // build is for feeling out the physics.
   const PLAY_W_RATIO = 3;
   const PLAY_H_RATIO = 4;
   // The control strip never gets shorter than this fraction of the table's
@@ -47,9 +47,9 @@
   const autoWrap = document.getElementById("autowrap");
   const eyeWrap = document.getElementById("eyewrap");
 
-  // Everything below this line is in board units, never pixels. `scale` is
-  // the only bridge between the two, and only layout, drawing and pointer
-  // input ever touch it.
+  // Everything below this line is in board units, never pixels. `scale` is the
+  // only bridge between the two, and only layout, drawing and pointer input
+  // ever touch it.
   let width = 0;
   let height = 0;
   let playHeight = 0;
@@ -57,8 +57,8 @@
 
   function layout() {
     const winH = window.innerHeight;
-    // Table height plus the control minimum, both expressed as multiples
-    // of the canvas width, gives the widest canvas the window can hold.
+    // Table height plus the control minimum, both expressed as multiples of the
+    // canvas width, gives the widest canvas the window can hold.
     const stack = PLAY_H_RATIO / PLAY_W_RATIO + CONTROL_MIN_RATIO;
     const wPx = Math.min(window.innerWidth, MAX_CANVAS_W, winH / stack);
 
@@ -67,9 +67,9 @@
     playHeight = board.h;
     height = winH / scale;
 
-    // Match the canvas's raster resolution to the display's real pixel
-    // density, or fine detail (tile numbers especially) gets upscaled and
-    // blurred on any HiDPI phone screen.
+    // Match the canvas's raster resolution to the display's real pixel density,
+    // or fine detail (tile numbers especially) gets upscaled and blurred on any
+    // HiDPI phone screen.
     const dpr = window.devicePixelRatio || 1;
     canvas.width = wPx * dpr;
     canvas.height = winH * dpr;
@@ -77,8 +77,8 @@
     canvas.style.height = winH + "px";
     ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
 
-    // The HUD sits over the table, not the browser window - it needs to
-    // match the canvas's actual footprint, not the viewport's.
+    // The HUD sits over the table, not the browser window - it needs to match
+    // the canvas's actual footprint, not the viewport's.
     hud.style.left = "50%";
     hud.style.width = wPx + "px";
     hud.style.transform = "translateX(-50%)";
@@ -140,8 +140,8 @@
     return { fill: fill, text: text };
   }
 
-  // Linear size growth, exponential value labels. Units, so a tile is the
-  // same fraction of a given board on every device.
+  // Linear size growth, exponential value labels. Units, so a tile is the same
+  // fraction of a given board on every device.
   const BASE_RADIUS = 16;
   const RADIUS_STEP = 4;
 
@@ -182,8 +182,8 @@
   }
   buildWalls();
 
-  // Only the canvas height in units moves on resize, so the tiles keep
-  // their coordinates and just the south wall shifts.
+  // Only the canvas height in units moves on resize, so the tiles keep their
+  // coordinates and just the south wall shifts.
   window.addEventListener("resize", function () {
     layout();
     buildWalls();
@@ -192,8 +192,8 @@
   // No air drag at all - the only things that bleed energy now are the solver's
   // contact losses and merges averaging two velocities into one.
   const FRICTION_AIR = 0;
-  // Shared by the thrown release and the Auto button, so both cap at one
-  // number rather than drifting apart.
+  // Shared by the thrown release and the Auto button, so both cap at one number
+  // rather than drifting apart.
   const MAX_SPEED = 60;
   let nextId = 1;
 
@@ -218,17 +218,17 @@
     return 2;
   }
 
-  // Grabbability is purely positional: any tile that hasn't crossed into
-  // the play area yet (body.crossedIntoPlay is falsy) is fair game to pick
-  // up, whatever it's doing. dragTarget is just whichever one a finger
-  // currently has hold of, if any.
+  // Grabbability is purely positional: any tile that hasn't crossed into the
+  // play area yet (body.crossedIntoPlay is falsy) is fair game to pick up,
+  // whatever it's doing. dragTarget is just whichever one a finger currently
+  // has hold of, if any.
   let dragTarget = null;
   let dragging = false;
 
-  // The effective pause - derived from the button and the window's focus,
-  // and read by the runner, the pointer handler and the save timer. Nothing
-  // is torn down when it flips, so a stuck pause is visible rather than
-  // silently killing autosave.
+  // The effective pause - derived from the button and the window's focus, and
+  // read by the runner, the pointer handler and the save timer. Nothing is torn
+  // down when it flips, so a stuck pause is visible rather than silently
+  // killing autosave.
   let paused = false;
 
   function spawnPoint() {
@@ -248,8 +248,8 @@
       if (body.isStatic || !body.value) continue;
       World.remove(engine.world, body);
     }
-    // A removed tile can never cross, so a stale pending would block Auto
-    // for good.
+    // A removed tile can never cross, so a stale pending would block Auto for
+    // good.
     autoPending = null;
   }
 
@@ -281,9 +281,9 @@
   }
 
   // -------------------------- save / restore --------------------------
-  // Raw snapshot, mid-motion and all - no "wait until it settles" logic,
-  // just every tile's exact position/velocity/value dumped as-is. Board
-  // units, so a save means the same thing on any screen.
+  // Raw snapshot, mid-motion and all - no "wait until it settles" logic, just
+  // every tile's exact position/velocity/value dumped as-is. Board units, so a
+  // save means the same thing on any screen.
   const SAVE_PREFIX = "yeetable.save.";
   const SAVE_INTERVAL = 30000;
 
@@ -309,8 +309,8 @@
       localStorage.setItem(saveKey(), JSON.stringify(payload));
     } catch (e) {}
   }
-  // Guarded here rather than inside saveState, so Save Now still works
-  // while paused instead of becoming a dead button.
+  // Guarded here rather than inside saveState, so Save Now still works while
+  // paused instead of becoming a dead button.
   setInterval(function () {
     if (paused) return;
     saveState();
@@ -400,9 +400,9 @@
       if (a.merging || b.merging) continue;
       if (a.value !== b.value) continue;
       if (a === dragTarget || b === dragTarget) continue;
-      // Merging is the table's job. Two tiles loose in the control strip
-      // just bounce off each other - otherwise Infinite Balls turns the
-      // strip into a second board you never have to throw from.
+      // Merging is the table's job. Two tiles loose in the control strip just
+      // bounce off each other - otherwise Infinite Balls turns the strip into a
+      // second board you never have to throw from.
       if (!a.crossedIntoPlay && !b.crossedIntoPlay) continue;
 
       a.merging = true;
@@ -414,8 +414,8 @@
       const vy = (a.velocity.y + b.velocity.y) / 2;
       const newValue = a.value * 2;
 
-      // Auto's gate waits on a specific body crossing the line. A merged
-      // parent is out of the world and never will, so stop waiting on it.
+      // Auto's gate waits on a specific body crossing the line. A merged parent
+      // is out of the world and never will, so stop waiting on it.
       if (a === autoPending || b === autoPending) {
         autoPending = null;
       }
@@ -433,9 +433,9 @@
   });
 
   // ------------------- semi-permeable boundary -------------------
-  // The play-area/control-strip line: freely crossable on the way up,
-  // sealed shut once a tile is fully inside the play area. Not tied to any
-  // loss condition - this is the table itself.
+  // The play-area/control-strip line: freely crossable on the way up, sealed
+  // shut once a tile is fully inside the play area. Not tied to any loss
+  // condition - this is the table itself.
   Events.on(engine, "afterUpdate", function () {
     const bodies = Matter.Composite.allBodies(engine.world);
     let anyInControl = false;
@@ -453,8 +453,8 @@
       if (body.position.y + r > playHeight) {
         Body.setPosition(body, { x: body.position.x, y: playHeight - r });
         if (body.velocity.y > 0) {
-          // Bounce back into the play area instead of freezing dead -
-          // it's a wall, not flypaper.
+          // Bounce back into the play area instead of freezing dead - it's a
+          // wall, not flypaper.
           Body.setVelocity(body, {
             x: body.velocity.x,
             y: -body.velocity.y,
@@ -486,9 +486,9 @@
     if (dragging || paused) return;
     const p = pointerPos(e);
     if (p.y <= playHeight) return;
-    // Any tap anywhere in the control area snaps the nearest tile still
-    // down there straight to the finger - no need to land the tap
-    // precisely on the tile itself.
+    // Any tap anywhere in the control area snaps the nearest tile still down
+    // there straight to the finger - no need to land the tap precisely on the
+    // tile itself.
     const bodies = Matter.Composite.allBodies(engine.world);
     let pick = null;
     let pickDist = Infinity;
@@ -519,8 +519,8 @@
     if (!dragging || !dragTarget) return;
     const p = pointerPos(e);
     const r = radiusFor(dragTarget.value);
-    // Dragging is confined to the control strip - crossing into the play
-    // area only happens on release, via velocity, never by hand.
+    // Dragging is confined to the control strip - crossing into the play area
+    // only happens on release, via velocity, never by hand.
     const x = Math.min(Math.max(p.x, r), width - r);
     const y = Math.min(Math.max(p.y, playHeight + r), height - r);
     Body.setPosition(dragTarget, { x: x, y: y });
@@ -556,9 +556,9 @@
   canvas.addEventListener("pointercancel", releaseDrag);
 
   // -------------------------- auto launch --------------------------
-  // A throw without a swipe. Direction is uniform over the circle minus a
-  // band either side of the horizontal - with no air drag, a shallow shot
-  // just rattles wall to wall forever without ever climbing to the table.
+  // A throw without a swipe. Direction is uniform over the circle minus a band
+  // either side of the horizontal - with no air drag, a shallow shot just
+  // rattles wall to wall forever without ever climbing to the table.
   const SHALLOW_BAND = 10 * (Math.PI / 180);
 
   function randomLaunchAngle() {
@@ -570,8 +570,8 @@
     return Math.PI + SHALLOW_BAND + (pick - arc);
   }
 
-  // A fresh ball's own footprint at the spawn point; anything overlapping
-  // that counts as sitting in the spawn area.
+  // A fresh ball's own footprint at the spawn point; anything overlapping that
+  // counts as sitting in the spawn area.
   const SPAWN_AREA = BASE_RADIUS;
 
   function tileInSpawnArea() {
@@ -602,9 +602,9 @@
     return null;
   }
 
-  // The tile this button last fired, held until it clears the boundary.
-  // Gating on "any un-launched tile exists" would disable Auto forever,
-  // since afterUpdate restocks the strip the moment it empties.
+  // The tile this button last fired, held until it clears the boundary. Gating
+  // on "any un-launched tile exists" would disable Auto forever, since
+  // afterUpdate restocks the strip the moment it empties.
   let autoPending = null;
 
   function autoBlocked() {
@@ -627,11 +627,11 @@
 
     let tile = null;
     if (autoOpts.infiniteBalls) {
-      // Throw whoever is standing on the spawn point, and only make a new
-      // ball when nobody is. Creating one on top of another would have
-      // Matter resolve the overlap with a separation impulse landing on
-      // top of the launch velocity, well past MAX_SPEED. Fired in place,
-      // since it is already where it needs to be.
+      // Throw whoever is standing on the spawn point, and only make a new ball
+      // when nobody is. Creating one on top of another would have Matter
+      // resolve the overlap with a separation impulse landing on top of the
+      // launch velocity, well past MAX_SPEED. Fired in place, since it is
+      // already where it needs to be.
       tile = tileInSpawnArea();
       if (!tile) {
         tile = spawnTile();
@@ -655,8 +655,8 @@
     const angle = randomLaunchAngle();
     const lo = autoOpts.speedMin / 100;
     const hi = autoOpts.speedMax / 100;
-    // Thumbs together collapses this to a constant, which is the fixed
-    // speed case falling out for free.
+    // Thumbs together collapses this to a constant, which is the fixed speed
+    // case falling out for free.
     const speed = MAX_SPEED * (lo + Math.random() * (hi - lo));
     Body.setVelocity(tile, {
       x: Math.cos(angle) * speed,
@@ -666,16 +666,16 @@
   }
 
   // ------------------------ auto options ------------------------
-  // Long-press or right-click Auto. Wording never changes; the leading
-  // mark carries the state. All three combine freely.
+  // Long-press or right-click Auto. Wording never changes; the leading mark
+  // carries the state. All three combine freely.
   const AUTO_OPTS_KEY = "yeetable.autoopts";
   const LONG_PRESS_MS = 450;
   const autoBtn = document.getElementById("auto");
   const autoMenu = document.getElementById("automenu");
 
-  // Percentages of MAX_SPEED, which is in board units - so a given percent
-  // is the same fraction of the table on every board. Zero would never
-  // arrive, but with no air drag any non-zero speed eventually does.
+  // Percentages of MAX_SPEED, which is in board units - so a given percent is
+  // the same fraction of the table on every board. Zero would never arrive, but
+  // with no air drag any non-zero speed eventually does.
   const SPEED_FLOOR = 1;
   const IDLE_MIN = 1;
   const IDLE_MAX = 20;
@@ -803,8 +803,8 @@
     } else {
       dragThumb = "min";
     }
-    // Capture, so straying off the track mid-drag neither loses the thumb
-    // nor reaches the handler that closes the menu.
+    // Capture, so straying off the track mid-drag neither loses the thumb nor
+    // reaches the handler that closes the menu.
     speedTrack.setPointerCapture(e.pointerId);
     moveThumb(pct);
   });
@@ -824,10 +824,10 @@
   speedTrack.addEventListener("pointercancel", endThumb);
 
   // -------------------------- idle --------------------------
-  // Auto on a timer. Every tick runs the same autoLaunch as a press, so
-  // pause, the speed range, the angle band and the three options all
-  // apply unchanged - a tick that lands on a closed gate simply does
-  // nothing and the next one tries again.
+  // Auto on a timer. Every tick runs the same autoLaunch as a press, so pause,
+  // the speed range, the angle band and the three options all apply unchanged -
+  // a tick that lands on a closed gate simply does nothing and the next one
+  // tries again.
   const idleBtn = document.getElementById("idle");
   const idleMenu = document.getElementById("idlemenu");
   const idleTrack = document.getElementById("idletrack");
@@ -907,9 +907,9 @@
     applyIdle();
   }
 
-  // Nothing in a control panel should ever start a native drag. Left
-  // alone, the browser sometimes decides a grab in here is one and hands
-  // back a floating ghost that fights the thumb you are actually moving.
+  // Nothing in a control panel should ever start a native drag. Left alone, the
+  // browser sometimes decides a grab in here is one and hands back a floating
+  // ghost that fights the thumb you are actually moving.
   for (const menu of [autoMenu, idleMenu]) {
     menu.addEventListener("dragstart", function (e) {
       e.preventDefault();
@@ -979,9 +979,9 @@
     menu.hidden = false;
   }
 
-  // Long press or right-click opens the button's menu; a plain tap runs
-  // its action. The press has to swallow the click that follows it, or
-  // opening a menu would also trigger the button underneath.
+  // Long press or right-click opens the button's menu; a plain tap runs its
+  // action. The press has to swallow the click that follows it, or opening a
+  // menu would also trigger the button underneath.
   function wirePressMenu(btn, menu, onTap) {
     let timer = null;
     let swallow = false;
@@ -1053,8 +1053,8 @@
     closeMenus();
   });
 
-  // Plain tap, unlike Auto and Idle - this button has no action of its
-  // own, so the menu is the whole point of pressing it.
+  // Plain tap, unlike Auto and Idle - this button has no action of its own, so
+  // the menu is the whole point of pressing it.
   moreBtn.addEventListener("click", function () {
     if (!moreMenu.hidden) {
       closeMenus();
@@ -1071,9 +1071,9 @@
   applyIdle();
 
   // -------------------------- hide the ui --------------------------
-  // One flag, two jobs: a class that drops the DOM overlays, and a check
-  // in draw() for the painted labels. Deliberately not persisted - a
-  // reload always comes back with the interface showing.
+  // One flag, two jobs: a class that drops the DOM overlays, and a check in
+  // draw() for the painted labels. Deliberately not persisted - a reload always
+  // comes back with the interface showing.
   let uiHidden = false;
   const eyeBtn = document.getElementById("eye");
 
@@ -1099,8 +1099,8 @@
 
   // -------------------------- pause --------------------------
   // Runner.enabled skips the engine update but leaves the loop running.
-  // Runner.stop/run would hand the engine the entire paused span as a
-  // single delta on resume and teleport every tile across the table.
+  // Runner.stop/run would hand the engine the entire paused span as a single
+  // delta on resume and teleport every tile across the table.
   const pauseBtn = document.getElementById("pause");
 
   // Two independent reasons to be paused. Keeping them apart is what stops
@@ -1113,8 +1113,8 @@
     const changed = next !== paused;
     paused = next;
     runner.enabled = !paused;
-    // The label tracks the button's own state; an auto-pause happens while
-    // you aren't looking and undoes itself, so it shouldn't relabel it.
+    // The label tracks the button's own state; an auto-pause happens while you
+    // aren't looking and undoes itself, so it shouldn't relabel it.
     if (manualPause) {
       pauseBtn.textContent = "Resume";
     } else {
@@ -1134,8 +1134,8 @@
   });
 
   // Asked fresh off the DOM rather than tracked per event, so the three
-  // listeners can't drift out of sync with each other. visibilitychange
-  // alone misses a window that is still visible but no longer focused.
+  // listeners can't drift out of sync with each other. visibilitychange alone
+  // misses a window that is still visible but no longer focused.
   function refreshFocus() {
     blurPause = false;
     if (gameOpts.pauseOnBlur) {
@@ -1149,8 +1149,8 @@
   document.addEventListener("visibilitychange", refreshFocus);
 
   // ---------------------- more options ----------------------
-  // Settings that belong to the game rather than to the Auto button, so
-  // they keep their own store.
+  // Settings that belong to the game rather than to the Auto button, so they
+  // keep their own store.
   for (const row of moreMenu.querySelectorAll(".opt")) {
     row.addEventListener("click", function (e) {
       e.stopPropagation();
