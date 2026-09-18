@@ -559,15 +559,14 @@
   // A throw without a swipe. Direction is uniform over the circle minus a band
   // either side of the horizontal - with no air drag, a shallow shot just
   // rattles wall to wall forever without ever climbing to the table.
-  const SHALLOW_BAND = 10 * (Math.PI / 180);
-
   function randomLaunchAngle() {
-    const arc = Math.PI - SHALLOW_BAND * 2;
+    const band = autoOpts.bandDeg * (Math.PI / 180);
+    const arc = Math.PI - band * 2;
     const pick = Math.random() * arc * 2;
     if (pick < arc) {
-      return SHALLOW_BAND + pick;
+      return band + pick;
     }
-    return Math.PI + SHALLOW_BAND + (pick - arc);
+    return Math.PI + band + (pick - arc);
   }
 
   // A fresh ball's own footprint at the spawn point; anything overlapping that
@@ -679,6 +678,11 @@
   const SPEED_FLOOR = 1;
   const IDLE_MIN = 1;
   const IDLE_MAX = 20;
+  // Degrees either side of horizontal that Auto will not launch into. At 45 the
+  // two dead bands meet and all that is left is a cone straight up and another
+  // straight down; past that it narrows towards vertical.
+  const BAND_MIN = 0;
+  const BAND_MAX = 80;
   const AUTO_FLAGS = [
     "disableUntilOut",
     "showWhenHidden",
@@ -694,10 +698,15 @@
     speedMax: 100,
     idleOn: false,
     idleSeconds: 4,
+    bandDeg: 10,
   };
 
   function clampPct(n) {
     return Math.min(Math.max(Math.round(n), SPEED_FLOOR), 100);
+  }
+
+  function clampBand(n) {
+    return Math.min(Math.max(Math.round(n), BAND_MIN), BAND_MAX);
   }
 
   function clampIdle(n) {
@@ -723,6 +732,9 @@
       if (typeof saved.idleSeconds === "number") {
         autoOpts.idleSeconds = clampIdle(saved.idleSeconds);
       }
+      if (typeof saved.bandDeg === "number") {
+        autoOpts.bandDeg = clampBand(saved.bandDeg);
+      }
     }
   } catch (e) {}
 
@@ -744,6 +756,7 @@
     }
     document.body.classList.toggle("auto-always", autoOpts.showWhenHidden);
     renderSpeed();
+    renderBand();
   }
 
   // ------------------------ speed slider ------------------------
@@ -900,6 +913,54 @@
 
   idleTrack.addEventListener("pointerup", endIdleDrag);
   idleTrack.addEventListener("pointercancel", endIdleDrag);
+
+  // ---------------------- launch angle band ----------------------
+  const bandTrack = document.getElementById("bandtrack");
+  const bandFill = document.getElementById("bandfill");
+  const bandThumb = document.getElementById("thumbband");
+  const bandOut = document.getElementById("bandout");
+  let bandDragging = false;
+
+  function renderBand() {
+    const span = BAND_MAX - BAND_MIN;
+    const t = ((autoOpts.bandDeg - BAND_MIN) / span) * 100;
+    bandThumb.style.left = t + "%";
+    bandFill.style.right = 100 - t + "%";
+    let label = autoOpts.bandDeg + "°";
+    if (autoOpts.bandDeg === 0) {
+      label = "none";
+    }
+    bandOut.textContent = label;
+  }
+
+  function bandFromEvent(e) {
+    const rect = bandTrack.getBoundingClientRect();
+    let t = (e.clientX - rect.left) / rect.width;
+    t = Math.min(Math.max(t, 0), 1);
+    return clampBand(BAND_MIN + t * (BAND_MAX - BAND_MIN));
+  }
+
+  bandTrack.addEventListener("pointerdown", function (e) {
+    bandDragging = true;
+    bandTrack.setPointerCapture(e.pointerId);
+    autoOpts.bandDeg = bandFromEvent(e);
+    renderBand();
+  });
+
+  bandTrack.addEventListener("pointermove", function (e) {
+    if (!bandDragging) return;
+    autoOpts.bandDeg = bandFromEvent(e);
+    renderBand();
+  });
+
+  function endBandDrag() {
+    if (!bandDragging) return;
+    bandDragging = false;
+    saveAutoOpts();
+  }
+
+  bandTrack.addEventListener("pointerup", endBandDrag);
+  bandTrack.addEventListener("pointercancel", endBandDrag);
 
   function toggleIdle() {
     autoOpts.idleOn = !autoOpts.idleOn;

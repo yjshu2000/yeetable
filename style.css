@@ -215,7 +215,8 @@ body.ui-hidden.auto-always #autowrap {
 /* Two thumbs on one track. They clamp against each other, so meeting in
    the middle is a valid state and means one fixed speed. */
 #speedtrack,
-#idletrack {
+#idletrack,
+#bandtrack {
   position: relative;
   height: 4px;
   margin: 0 11px 10px;
@@ -225,7 +226,8 @@ body.ui-hidden.auto-always #autowrap {
 }
 
 #speedfill,
-#idlefill {
+#idlefill,
+#bandfill {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -235,7 +237,8 @@ body.ui-hidden.auto-always #autowrap {
 }
 
 #speedtrack .thumb,
-#idletrack .thumb {
+#idletrack .thumb,
+#bandtrack .thumb {
   position: absolute;
   top: 50%;
   width: 22px;
