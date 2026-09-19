@@ -33,26 +33,6 @@ html, body {
   z-index: 2;
 }
 
-.hud-left {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-/* This menu flies out beside its button rather than above it, so both of
-   .popmenu's anchors have to be undone. */
-.more-pick {
-  position: relative;
-}
-
-#moremenu {
-  right: auto;
-  bottom: auto;
-  top: 0;
-  left: calc(100% + 8px);
-}
-
 .hud-stats {
   display: flex;
   gap: 48px;
@@ -131,6 +111,7 @@ body.ui-hidden #icon-show {
 }
 
 body.ui-hidden #hud,
+body.ui-hidden #menuwrap,
 body.ui-hidden #autowrap {
   display: none;
 }
@@ -255,8 +236,9 @@ body.ui-hidden.auto-always #autowrap {
   opacity: 0.4;
 }
 
-/* Idle is running. */
-#autowrap > button.on {
+/* Idle is running, or Pause when unfocused is on. */
+#autowrap > button.on,
+#menuwrap button.on {
   background: rgba(111, 208, 140, 0.22);
   border-color: rgba(111, 208, 140, 0.55);
   color: #b8f0c9;
@@ -268,7 +250,7 @@ body.ui-hidden #eyewrap button {
 }
 
 .hud-actions button,
-.hud-left button,
+#menuwrap button,
 #autowrap > button {
   pointer-events: auto;
   background: rgba(255, 255, 255, 0.1);
@@ -282,7 +264,7 @@ body.ui-hidden #eyewrap button {
 }
 
 .hud-actions button:active,
-.hud-left button:active,
+#menuwrap button:active,
 #autowrap > button:active {
   background: rgba(255, 255, 255, 0.2);
 }
@@ -313,4 +295,114 @@ body.ui-hidden #eyewrap button {
 
 .board-pick:active button {
   background: rgba(255, 255, 255, 0.2);
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 5px 0;
+  font-size: 14px;
+}
+
+.stat-row output {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Bottom-left of the table. layout() makes it exactly as tall as the table,
+   so the row sits on the dashed line and everything above it opens upward
+   into the play area, never into the control strip. */
+#menuwrap {
+  position: fixed;
+  top: 0;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 10px 10px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Everything in here toggles with the hidden attribute, and any author
+   display rule would otherwise override the UA's [hidden]. */
+#menuwrap [hidden] {
+  display: none;
+}
+
+/* Spread across the table: More Options on the left edge, Stats on the right,
+   Sound Menu between. With only More Options showing it stays on the left.
+   The gap is just a floor so they can't touch on a narrow screen. */
+.menu-row {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+/* Each button's own panel is positioned against it. */
+.menu-slot {
+  position: relative;
+}
+
+.menu-col {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.confirm-pair {
+  display: flex;
+  gap: 6px;
+}
+
+/* left is set from JS: centred over its button, kept inside the table. */
+.menu-panel {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  pointer-events: auto;
+}
+
+.stats-panel {
+  min-width: 220px;
+  padding: 8px 14px;
+  background: rgba(24, 28, 36, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  color: #eef0f5;
+}
+
+#menuwrap button {
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* While Confirm? is showing, a tap anywhere else only dismisses it. The veil
+   catches those taps; the menu is lifted above the veil so Confirm? stays
+   reachable, and everything else in it lets taps fall through to the veil. */
+#confirmveil {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+
+#confirmveil[hidden] {
+  display: none;
+}
+
+body.confirming #menuwrap {
+  z-index: 60;
+}
+
+body.confirming #menuwrap * {
+  pointer-events: none;
+}
+
+body.confirming #menuwrap #confirmnew {
+  pointer-events: auto;
 }

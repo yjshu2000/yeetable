@@ -11,36 +11,58 @@
 <body>
 
 <div id="hud">
-  <div class="hud-left">
-    <div class="more-pick">
-      <button id="moreopts" type="button">More options</button>
-      <div id="moremenu" class="popmenu" hidden>
-        <button class="opt" type="button" data-gopt="pauseOnBlur"><span class="mark"></span>Pause when unfocused</button>
-      </div>
+  <div class="hud-stats">
+    <div class="hud-stat">
+      <div class="k">Score</div>
+      <div class="v" id="score">0</div>
     </div>
-    <div class="hud-stats">
-      <div class="hud-stat">
-        <div class="k">Score</div>
-        <div class="v" id="score">0</div>
-      </div>
-      <div class="hud-stat">
-        <div class="k">Best</div>
-        <div class="v" id="best">0</div>
-      </div>
+    <div class="hud-stat">
+      <div class="k">Best</div>
+      <div class="v" id="best">0</div>
     </div>
   </div>
   <div class="hud-actions">
-    <button id="newgame">New Game</button>
-    <button id="savenow">Save Now</button>
-    <div class="board-pick">
-      <button id="boardbtn" type="button" tabindex="-1">Go To Board &#9662;</button>
-      <select id="boardsel" aria-label="Board size"></select>
-    </div>
     <button id="pause">Pause</button>
   </div>
 </div>
 
 <canvas id="board"></canvas>
+
+<div id="menuwrap">
+  <div class="menu-row">
+    <div class="menu-slot">
+      <div class="menu-col" id="morecol" hidden>
+        <div class="confirm-pair">
+          <button id="newgame" type="button">New Game</button>
+          <button id="confirmnew" type="button" hidden>Confirm?</button>
+        </div>
+        <button id="savenow" type="button">Save Now</button>
+        <div class="board-pick">
+          <button id="boardbtn" type="button" tabindex="-1">Go To Board &#9662;</button>
+          <select id="boardsel" aria-label="Board size"></select>
+        </div>
+        <button id="blurtoggle" type="button">Pause when unfocused</button>
+      </div>
+      <button id="moreopts" type="button">More Options</button>
+    </div>
+    <div class="menu-slot">
+      <div class="menu-panel" id="soundpanel" hidden>
+        <button type="button">WIP</button>
+      </div>
+      <button id="soundbtn" type="button" hidden>Sound Menu</button>
+    </div>
+    <div class="menu-slot">
+      <div class="menu-panel stats-panel" id="statspanel" hidden>
+        <div class="stat-row" id="row-escaped" hidden><span>Escaped balls</span><output id="st-escaped"></output></div>
+        <div class="stat-row"><span>Total ball area</span><output id="st-area"></output></div>
+        <div class="stat-row"><span>% of table area</span><output id="st-pct"></output></div>
+      </div>
+      <button id="statsbtn" type="button" hidden>Stats</button>
+    </div>
+  </div>
+</div>
+
+<div id="confirmveil" hidden></div>
 
 <div id="autowrap">
   <div id="idlemenu" class="popmenu" hidden>

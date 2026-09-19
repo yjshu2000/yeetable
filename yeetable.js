@@ -46,6 +46,7 @@
   const hud = document.getElementById("hud");
   const autoWrap = document.getElementById("autowrap");
   const eyeWrap = document.getElementById("eyewrap");
+  const menuWrap = document.getElementById("menuwrap");
 
   // Everything below this line is in board units, never pixels. `scale` is the
   // only bridge between the two, and only layout, drawing and pointer input
@@ -88,6 +89,12 @@
     eyeWrap.style.left = "50%";
     eyeWrap.style.width = wPx + "px";
     eyeWrap.style.transform = "translateX(-50%)";
+    // Exactly as tall as the table, so its row sits on the dashed line and
+    // everything it opens goes up into the play area.
+    menuWrap.style.left = "50%";
+    menuWrap.style.width = wPx + "px";
+    menuWrap.style.transform = "translateX(-50%)";
+    menuWrap.style.height = playHeight * scale + "px";
   }
   layout();
 
@@ -302,6 +309,7 @@
         vy: body.velocity.y,
         value: body.value,
         crossedIntoPlay: !!body.crossedIntoPlay,
+        escaped: !!body.escaped,
       });
     }
     const payload = { tiles: tiles, score: score };
@@ -330,6 +338,7 @@
       const body = makeTile(t.x, t.y, t.value);
       Body.setVelocity(body, { x: t.vx, y: t.vy });
       body.crossedIntoPlay = !!t.crossedIntoPlay;
+      body.escaped = !!t.escaped;
     }
     if (typeof data.score === "number") {
       setScore(data.score);
@@ -348,7 +357,6 @@
     } catch (e) {}
     spawnTile();
   }
-  document.getElementById("newgame").addEventListener("click", newGame);
 
   // -------------------------- board switching --------------------------
   // Each board keeps its own save, so switching parks the current one and
@@ -449,6 +457,14 @@
           anyInControl = true;
         }
         continue;
+      }
+      // Flagged rather than recounted from position, so the tally can only go
+      // up even if the solver ever shoves a ball back through a wall.
+      if (!body.escaped) {
+        const x = body.position.x;
+        if (x < 0 || x > width || body.position.y < 0) {
+          body.escaped = true;
+        }
       }
       if (body.position.y + r > playHeight) {
         Body.setPosition(body, { x: body.position.x, y: playHeight - r });
@@ -990,8 +1006,6 @@
     });
   }
 
-  const moreMenu = document.getElementById("moremenu");
-
   // Game-wide settings, kept apart from the Auto button's own options.
   const GAME_OPTS_KEY = "yeetable.opts";
   const GAME_FLAGS = ["pauseOnBlur"];
@@ -1017,22 +1031,15 @@
     } catch (e) {}
   }
 
+  const blurToggle = document.getElementById("blurtoggle");
+
   function renderGameOpts() {
-    for (const row of moreMenu.querySelectorAll(".opt")) {
-      const on = gameOpts[row.dataset.gopt];
-      row.classList.toggle("on", on);
-      let mark = "✗";
-      if (on) {
-        mark = "✓";
-      }
-      row.querySelector(".mark").textContent = mark;
-    }
+    blurToggle.classList.toggle("on", gameOpts.pauseOnBlur);
   }
 
   function closeMenus() {
     autoMenu.hidden = true;
     idleMenu.hidden = true;
-    moreMenu.hidden = true;
   }
 
   function openMenu(menu) {
@@ -1102,30 +1109,12 @@
     autoBtn.classList.toggle("cant", blocked);
   }
 
-  const moreBtn = document.getElementById("moreopts");
-
   document.addEventListener("pointerdown", function (e) {
-    if (autoMenu.hidden && idleMenu.hidden && moreMenu.hidden) return;
+    if (autoMenu.hidden && idleMenu.hidden) return;
     if (autoMenu.contains(e.target)) return;
     if (idleMenu.contains(e.target)) return;
-    if (moreMenu.contains(e.target)) return;
     if (e.target === autoBtn || e.target === idleBtn) return;
-    if (e.target === moreBtn) return;
     closeMenus();
-  });
-
-  // Plain tap, unlike Auto and Idle - this button has no action of its own, so
-  // the menu is the whole point of pressing it.
-  moreBtn.addEventListener("click", function () {
-    if (!moreMenu.hidden) {
-      closeMenus();
-      return;
-    }
-    openMenu(moreMenu);
-  });
-
-  moreMenu.addEventListener("dragstart", function (e) {
-    e.preventDefault();
   });
 
   renderAutoOpts();
@@ -1212,22 +1201,166 @@
   // ---------------------- more options ----------------------
   // Settings that belong to the game rather than to the Auto button, so they
   // keep their own store.
-  for (const row of moreMenu.querySelectorAll(".opt")) {
-    row.addEventListener("click", function (e) {
-      e.stopPropagation();
-      const key = row.dataset.gopt;
-      gameOpts[key] = !gameOpts[key];
-      saveGameOpts();
-      renderGameOpts();
-      refreshFocus();
-    });
-  }
+  blurToggle.addEventListener("click", function () {
+    gameOpts.pauseOnBlur = !gameOpts.pauseOnBlur;
+    saveGameOpts();
+    renderGameOpts();
+    refreshFocus();
+  });
 
   renderGameOpts();
   refreshFocus();
 
+  // --------------------------- stats ---------------------------
+  // Area is summed ball by ball, so overlapping balls are counted twice and the
+  // percentage can pass 100% on a jammed board. That is intended.
+  const statsPanel = document.getElementById("statspanel");
+  const rowEscaped = document.getElementById("row-escaped");
+  const outEscaped = document.getElementById("st-escaped");
+  const outArea = document.getElementById("st-area");
+  const outPct = document.getElementById("st-pct");
+
+  function renderStats() {
+    if (statsPanel.hidden) {
+      return;
+    }
+    let escaped = 0;
+    let area = 0;
+    for (const body of Matter.Composite.allBodies(engine.world)) {
+      if (body.isStatic || !body.value) continue;
+      if (body.escaped) {
+        escaped += 1;
+        continue;
+      }
+      if (!body.crossedIntoPlay) continue;
+      const r = body.circleRadius;
+      area += Math.PI * r * r;
+    }
+    const pct = (area / (width * playHeight)) * 100;
+    rowEscaped.hidden = escaped === 0;
+    outEscaped.textContent = String(escaped);
+    outArea.textContent = Math.round(area).toLocaleString("en-CA");
+    outPct.textContent = pct.toFixed(1) + "%";
+  }
+
+  // ------------------------ bottom menu ------------------------
+  // More Options opens the column above it and Sound Menu and Stats beside it,
+  // and closing it closes everything. Sound Menu and Stats each close only from
+  // their own button. Anything open can overlap; the newest is on top.
+  const EDGE_INSET = 10;
+  const moreBtn = document.getElementById("moreopts");
+  const moreCol = document.getElementById("morecol");
+  const soundBtn = document.getElementById("soundbtn");
+  const soundPanel = document.getElementById("soundpanel");
+  const statsBtn = document.getElementById("statsbtn");
+  let moreOpen = false;
+  let topZ = 1;
+
+  function bringToFront(el) {
+    topZ += 1;
+    el.style.zIndex = String(topZ);
+  }
+
+  // Centred over its own button, but never closer than EDGE_INSET to either
+  // side of the table - the same inset the buttons themselves sit at.
+  function placePanel(panel) {
+    const slot = panel.parentElement.getBoundingClientRect();
+    const table = menuWrap.getBoundingClientRect();
+    const w = panel.offsetWidth;
+    let left = slot.left + slot.width / 2 - w / 2;
+    const maxLeft = table.right - EDGE_INSET - w;
+    const minLeft = table.left + EDGE_INSET;
+    if (left > maxLeft) {
+      left = maxLeft;
+    }
+    if (left < minLeft) {
+      left = minLeft;
+    }
+    panel.style.left = left - slot.left + "px";
+  }
+
+  function openPanel(panel) {
+    panel.hidden = false;
+    placePanel(panel);
+    bringToFront(panel);
+  }
+
+  function setMoreOpen(open) {
+    moreOpen = open;
+    moreCol.hidden = !open;
+    soundBtn.hidden = !open;
+    statsBtn.hidden = !open;
+    if (open) {
+      bringToFront(moreCol);
+      return;
+    }
+    soundPanel.hidden = true;
+    statsPanel.hidden = true;
+    dismissConfirm();
+  }
+
+  moreBtn.addEventListener("click", function () {
+    setMoreOpen(!moreOpen);
+  });
+
+  soundBtn.addEventListener("click", function () {
+    if (soundPanel.hidden) {
+      openPanel(soundPanel);
+      return;
+    }
+    soundPanel.hidden = true;
+  });
+
+  statsBtn.addEventListener("click", function () {
+    if (statsPanel.hidden) {
+      // Filled before it is measured, so it is placed at its real width.
+      statsPanel.hidden = false;
+      renderStats();
+      openPanel(statsPanel);
+      return;
+    }
+    statsPanel.hidden = true;
+  });
+
+  window.addEventListener("resize", function () {
+    for (const panel of [soundPanel, statsPanel]) {
+      if (!panel.hidden) {
+        placePanel(panel);
+      }
+    }
+  });
+
+  // ------------------------ new game confirm ------------------------
+  // New Game only offers Confirm?. The veil takes every other tap on screen, so
+  // a stray tap dismisses it and does nothing else - it cannot also grab a ball
+  // or press the button underneath.
+  const confirmBtn = document.getElementById("confirmnew");
+  const confirmVeil = document.getElementById("confirmveil");
+
+  function showConfirm() {
+    confirmBtn.hidden = false;
+    confirmVeil.hidden = false;
+    document.body.classList.add("confirming");
+  }
+
+  function dismissConfirm() {
+    confirmBtn.hidden = true;
+    confirmVeil.hidden = true;
+    document.body.classList.remove("confirming");
+  }
+
+  document.getElementById("newgame").addEventListener("click", showConfirm);
+
+  confirmBtn.addEventListener("click", function () {
+    dismissConfirm();
+    newGame();
+  });
+
+  confirmVeil.addEventListener("click", dismissConfirm);
+
   function draw() {
     refreshAutoBlocked();
+    renderStats();
     ctx.clearRect(0, 0, width, height);
 
     // table surface
